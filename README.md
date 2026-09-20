@@ -15,6 +15,12 @@
 # 安装依赖
 pip install -r requirements.txt
 
+# 配置本地环境变量（密钥、数据库口令；.env 不会提交 git）
+copy .env.example .env
+#   编辑 .env：填入 DJANGO_SECRET_KEY（可用
+#   python -c "import secrets; print(secrets.token_urlsafe(50))" 生成）
+#   以及本地 PostgreSQL 的账号密码
+
 # 数据库迁移
 python manage.py migrate
 
@@ -26,6 +32,20 @@ python manage.py runserver
 ```
 
 访问 `http://127.0.0.1:6321/`，管理员后台 `http://127.0.0.1:6321/admin/`。
+
+## 配置与环境变量
+
+所有敏感/环境相关配置通过环境变量或项目根目录 `.env` 注入（`.env` 已在 `.gitignore`，`.env.example` 为模板）：
+
+| 变量 | 说明 |
+|------|------|
+| `DJANGO_SECRET_KEY` | **必填**，随机密钥；缺失时启动报错 |
+| `DJANGO_DEBUG` | 本地开发设 `True`，默认 `False` |
+| `DJANGO_ALLOWED_HOSTS` | 逗号分隔的域名白名单 |
+| `DJANGO_SECURE` | 生产 HTTPS 设 `True`：启用 SSL 跳转、HSTS、安全 Cookie 等 |
+| `DB_NAME / DB_USER / DB_PASSWORD / DB_HOST / DB_PORT` | PostgreSQL 连接信息 |
+
+生产部署还应在前置 nginx 等代理上限制请求体大小（现场视频上限 500MB、照片 10MB）。
 
 ## 角色与权限
 
@@ -96,9 +116,9 @@ repair_system/
 │   └── templates/approvals/    # 模板
 ├── repair_system/              # 项目配置（settings/urls/wsgi）
 ├── templates/admin/            # 后台定制
-├── media/                      # 用户上传（现场照片等）
-├── manage.py
-└── db.sqlite3                  # 本地开发库
+├── media/                      # 用户上传（登录后才可访问，文件名 UUID 随机化）
+├── .env.example                # 环境变量模板（复制为 .env 使用）
+└── manage.py
 ```
 
 ## 测试
@@ -107,7 +127,17 @@ repair_system/
 python manage.py test approvals -v 1
 ```
 
-测试覆盖：工单审批流、派工状态机、设备编码、备件编码生成、出入库台账平衡、超扣拦截、库存权限、关联派工单事件、低库存筛选与预警等。
+测试覆盖（61 个用例）：工单审批流、派工状态机、设备编码、备件编码生成、出入库台账平衡、超扣拦截、库存权限、关联派工单事件、低库存筛选与预警、伪造上传内容拦截、媒体访问鉴权、登录锁定等。
+
+## 安全设计
+
+- **密钥/口令不入库**：SECRET_KEY、数据库密码全部走环境变量/`.env`；`DEBUG` 默认关闭。
+- **生产安全头**：`DJANGO_SECURE=True` 时启用 HTTPS 跳转、HSTS、Secure Cookie、X-Content-Type-Options 等。
+- **上传校验**：扩展名白名单 + 真实内容校验（图片经 Pillow 解码验证，视频校验 ftyp/EBML/RIFF 魔数），照片 ≤10MB、视频 ≤500MB。
+- **媒体鉴权**：`/media/` 下所有现场照片、视频必须登录后访问；存储名使用 UUID，不暴露原始文件名。
+- **状态机并发安全**：审批、接单/拒单/改派、完工、两级验收、结算等写操作均在事务内以 `select_for_update()` 行锁 + 二次状态校验，防止并发连跳/重复操作。
+- **登录防爆破**：同一 IP 连续 10 次失败后锁定 15 分钟（基于缓存计数，无额外依赖）。
+- 全站写操作要求 POST + CSRF，模板自动转义，业务列表按角色做可见性隔离。
 
 ## 关键约束
 

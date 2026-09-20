@@ -1,6 +1,27 @@
+import os
+import uuid
+
 from django.conf import settings
 from django.db import models, transaction
 from django.utils import timezone
+
+
+def _uuid_filename(folder, filename):
+    """生成不携带原始文件名、不可猜测的存储路径，保留扩展名。"""
+    ext = os.path.splitext(filename)[1].lower()[:10]
+    return f"{folder}/{uuid.uuid4().hex}{ext}"
+
+
+def dispatch_photo_upload_to(instance, filename):
+    return _uuid_filename("dispatch_photos", filename)
+
+
+def dispatch_media_upload_to(instance, filename):
+    return _uuid_filename("dispatch_media", filename)
+
+
+def repair_media_upload_to(instance, filename):
+    return _uuid_filename("repair_media", filename)
 
 
 class Region(models.Model):
@@ -728,7 +749,7 @@ class DispatchOrder(models.Model):
     actual_measures = models.TextField("实际维修措施", blank=True)
     reject_reason = models.CharField("拒单理由", max_length=255, blank=True)
     reassigned_times = models.PositiveIntegerField("改派次数", default=0)
-    photo = models.ImageField("现场照片", upload_to="dispatch_photos/", blank=True)
+    photo = models.ImageField("现场照片", upload_to=dispatch_photo_upload_to, blank=True)
     status = models.CharField(
         "状态",
         max_length=20,
@@ -810,7 +831,7 @@ class DispatchMedia(models.Model):
         choices=Phase.choices,
         default=Phase.AFTER,
     )
-    file = models.FileField("文件", upload_to="dispatch_media/%Y/%m/")
+    file = models.FileField("文件", upload_to=dispatch_media_upload_to)
     filename = models.CharField("原始文件名", max_length=255, blank=True)
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -897,7 +918,7 @@ class RepairMedia(models.Model):
         on_delete=models.CASCADE,
     )
     media_type = models.CharField("类型", max_length=10, choices=MediaType.choices)
-    file = models.FileField("文件", upload_to="repair_media/%Y/%m/")
+    file = models.FileField("文件", upload_to=repair_media_upload_to)
     filename = models.CharField("原始文件名", max_length=255, blank=True)
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

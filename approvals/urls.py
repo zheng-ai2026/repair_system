@@ -1,11 +1,14 @@
 from django.contrib.auth import views as auth_views
-from django.urls import path
+from django.urls import path, re_path
 
 from . import views
 
 urlpatterns = [
-    path("login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
+    path("login/", views.ThrottledLoginView.as_view(template_name="registration/login.html"), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+
+    # 媒体文件（现场照片/视频）需登录后访问
+    re_path(r"^media/(?P<path>.*)$", views.protected_media, name="protected_media"),
 
     path("", views.home, name="home"),
 

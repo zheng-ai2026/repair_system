@@ -9,6 +9,10 @@ db.sqlite3-journal
 media/
 staticfiles/
 
+# 本地环境配置（含密钥，禁止提交）
+.env
+.env.local
+
 # IDE / OS
 .vscode/
 .idea/

@@ -1,8 +1,12 @@
 import io
 
 import qrcode
+from PIL import Image
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import LoginView
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import F, Q
 from django.http import HttpResponse
@@ -10,6 +14,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.views.static import serve as static_serve
 
 from .forms import (
     AcceptanceRatingForm,
@@ -52,6 +57,38 @@ from .services import (
 )
 
 
+class ThrottledLoginView(LoginView):
+    """登录失败防爆破：同一 IP 连续失败 N 次后锁定一段时间。"""
+
+    MAX_FAILURES = 10
+    LOCK_SECONDS = 15 * 60
+
+    def _cache_key(self):
+        return f"login_failures:{self.request.META.get('REMOTE_ADDR', 'unknown')}"
+
+    def post(self, request, *args, **kwargs):
+        key = self._cache_key()
+        failures = cache.get(key, 0)
+        if failures >= self.MAX_FAILURES:
+            messages.error(
+                request,
+                "登录失败次数过多，为保障账号安全已临时锁定，请 15 分钟后再试。",
+            )
+            return self.form_invalid(self.get_form())
+        response = super().post(request, *args, **kwargs)
+        if response.status_code in (301, 302):
+            cache.delete(key)               # 登录成功
+        else:
+            cache.set(key, failures + 1, self.LOCK_SECONDS)
+        return response
+
+
+@login_required
+def protected_media(request, path):
+    """媒体文件必须登录后才能访问（现场照片/视频含油站敏感信息）。"""
+    return static_serve(request, path, document_root=settings.MEDIA_ROOT)
+
+
 def _entry_status(repair):
     """单据提交/重新提交时的首个审批状态。
 
@@ -63,10 +100,38 @@ def _entry_status(repair):
     return RepairRequest.Status.PENDING_REGION_ADMIN
 
 
+def _verify_image_content(upload):
+    """用 Pillow 校验确为可解码的图片（防伪造扩展名）。"""
+    upload.seek(0)
+    try:
+        with Image.open(upload) as img:
+            img.verify()
+    except Exception:
+        return False
+    finally:
+        upload.seek(0)
+    return True
+
+
+def _verify_video_content(upload):
+    """按文件头魔数校验常见视频容器（mp4/mov/m4v、mkv/webm、avi）。"""
+    upload.seek(0)
+    head = upload.read(32)
+    upload.seek(0)
+    if len(head) >= 8 and head[4:8] == b"ftyp":
+        return True                       # MP4 / MOV / M4V
+    if head[:4] == b"\x1aE\xdf\xa3":
+        return True                       # MKV / WebM（EBML 头）
+    if head[:4] == b"RIFF" and head[8:12] == b"AVI ":
+        return True                       # AVI
+    return False
+
+
 def _validate_media_uploads(uploads, media_model):
     """校验多文件上传，返回 [(uploaded_file, media_type, size_limit)]。
 
-    任一文件类型不支持或超限时返回 (None, 错误信息)。
+    校验维度：扩展名白名单 + 真实内容（图片可解码 / 视频魔数）+ 大小。
+    任一文件不合法即返回 (None, 错误信息)。
     """
     rows = []
     for upload in uploads:
@@ -81,6 +146,11 @@ def _validate_media_uploads(uploads, media_model):
         if upload.size > size_limit:
             limit_mb = size_limit // (1024 * 1024)
             return None, f"文件 {upload.name} 超过大小限制（{'照片' if media_type == media_model.MediaType.IMAGE else '视频'} ≤{limit_mb}MB）"
+        if media_type == media_model.MediaType.IMAGE:
+            if not _verify_image_content(upload):
+                return None, f"文件 {upload.name} 内容不是有效的图片，已拒绝上传"
+        elif not _verify_video_content(upload):
+            return None, f"文件 {upload.name} 内容不是有效的视频，已拒绝上传"
         rows.append((upload, media_type, size_limit))
     return rows, None
 
@@ -373,8 +443,11 @@ def approval_queue(request):
 
 @login_required
 @require_POST
+@transaction.atomic
 def approve(request, pk):
     repair = get_object_or_404(visible_repair_requests(request.user), pk=pk)
+    # 行锁 + 二次状态校验：防止两人并发审批导致状态连跳/重复记录
+    repair = RepairRequest.objects.select_for_update().get(pk=pk)
     if repair.status not in approvable_statuses(request.user):
         messages.error(request, "当前单据不在你的审批环节或已被处理。")
         return redirect("repair_detail", pk=pk)
@@ -476,8 +549,10 @@ def approve(request, pk):
 
 @login_required
 @require_POST
+@transaction.atomic
 def resubmit(request, pk):
     repair = get_object_or_404(visible_repair_requests(request.user), pk=pk)
+    repair = RepairRequest.objects.select_for_update().get(pk=pk)
     if repair.status != RepairRequest.Status.DRAFT or repair.reporter_id != request.user.id:
         messages.error(request, "只有草稿状态的申请人可以重新提交。")
         return redirect("repair_detail", pk=pk)
@@ -748,6 +823,7 @@ def dispatch_list(request):
 
 
 @login_required
+@transaction.atomic
 def dispatch_create(request):
     if not _is_safety(request.user):
         messages.error(request, "只有安数部维修岗可以派工。")
@@ -758,6 +834,11 @@ def dispatch_create(request):
         if form.is_valid():
             repair = form.cleaned_data["repair_request"]
             team = form.cleaned_data["engineering_team"]
+            # 锁维修单并二次校验状态，防止并发重复派工
+            repair = RepairRequest.objects.select_for_update().get(pk=repair.pk)
+            if repair.status != RepairRequest.Status.APPROVED:
+                messages.error(request, "该维修单已派工或状态已变化，请刷新后重试。")
+                return redirect("dispatch_detail", pk=repair.pk)
             dispatch = DispatchOrder.objects.create(
                 repair_request=repair,
                 engineering_team=team,
@@ -875,8 +956,10 @@ def dispatch_detail(request, pk):
 
 @login_required
 @require_POST
+@transaction.atomic
 def dispatch_complete(request, pk):
-    dispatch = get_object_or_404(visible_dispatch_orders(request.user), pk=pk)
+    get_object_or_404(visible_dispatch_orders(request.user), pk=pk)
+    dispatch = DispatchOrder.objects.select_for_update().get(pk=pk)
     if dispatch.status != DispatchOrder.Status.IN_PROGRESS or not _is_team_member(
         request.user, dispatch
     ):
@@ -970,9 +1053,11 @@ def dispatch_complete(request, pk):
 
 @login_required
 @require_POST
+@transaction.atomic
 def dispatch_accept(request, pk):
     """工程队接单：待接单 -> 维修中，记录开工时间。"""
-    dispatch = get_object_or_404(visible_dispatch_orders(request.user), pk=pk)
+    get_object_or_404(visible_dispatch_orders(request.user), pk=pk)
+    dispatch = DispatchOrder.objects.select_for_update().get(pk=pk)
     if dispatch.status != DispatchOrder.Status.PENDING_ACCEPT or not _is_team_member(
         request.user, dispatch
     ):
@@ -1016,9 +1101,11 @@ def dispatch_accept(request, pk):
 
 @login_required
 @require_POST
+@transaction.atomic
 def dispatch_reject(request, pk):
     """工程队拒单：待接单 -> 已拒单，必须填写理由，单据退回待派工状态。"""
-    dispatch = get_object_or_404(visible_dispatch_orders(request.user), pk=pk)
+    get_object_or_404(visible_dispatch_orders(request.user), pk=pk)
+    dispatch = DispatchOrder.objects.select_for_update().get(pk=pk)
     if dispatch.status != DispatchOrder.Status.PENDING_ACCEPT or not _is_team_member(
         request.user, dispatch
     ):
@@ -1031,6 +1118,7 @@ def dispatch_reject(request, pk):
         return redirect("dispatch_detail", pk=pk)
 
     reason = form.cleaned_data["reject_reason"]
+    RepairRequest.objects.select_for_update().get(pk=dispatch.repair_request_id)
     dispatch.status = DispatchOrder.Status.REJECTED
     dispatch.reject_reason = reason
     dispatch.started_at = None
@@ -1067,9 +1155,11 @@ def dispatch_reject(request, pk):
 
 @login_required
 @require_POST
+@transaction.atomic
 def dispatch_reassign(request, pk):
     """安数部在拒单后改派：更换工程队并重新进入待接单。"""
-    dispatch = get_object_or_404(visible_dispatch_orders(request.user), pk=pk)
+    get_object_or_404(visible_dispatch_orders(request.user), pk=pk)
+    dispatch = DispatchOrder.objects.select_for_update().get(pk=pk)
     if not _is_safety(request.user):
         messages.error(request, "只有安数部维修岗可以改派。")
         return redirect("dispatch_detail", pk=pk)
@@ -1083,6 +1173,7 @@ def dispatch_reassign(request, pk):
         return redirect("dispatch_detail", pk=pk)
 
     team = form.cleaned_data["engineering_team"]
+    RepairRequest.objects.select_for_update().get(pk=dispatch.repair_request_id)
     old_team_name = dispatch.engineering_team.full_name
     dispatch.engineering_team = team
     dispatch.leader = form.cleaned_data.get("leader") or getattr(team, "bound_user", None)
@@ -1121,9 +1212,11 @@ def dispatch_reassign(request, pk):
 
 @login_required
 @require_POST
+@transaction.atomic
 def dispatch_rate(request, pk):
     """报修人对完工服务进行三维度评价，每单仅一次。"""
-    dispatch = get_object_or_404(visible_dispatch_orders(request.user), pk=pk)
+    get_object_or_404(visible_dispatch_orders(request.user), pk=pk)
+    dispatch = DispatchOrder.objects.select_for_update().get(pk=pk)
     if dispatch.repair_request.reporter_id != request.user.id:
         messages.error(request, "只有报修人可以评价。")
         return redirect("dispatch_detail", pk=pk)
@@ -1170,8 +1263,10 @@ def dispatch_rate(request, pk):
 
 @login_required
 @require_POST
+@transaction.atomic
 def dispatch_review(request, pk):
-    dispatch = get_object_or_404(visible_dispatch_orders(request.user), pk=pk)
+    get_object_or_404(visible_dispatch_orders(request.user), pk=pk)
+    dispatch = DispatchOrder.objects.select_for_update().get(pk=pk)
     passed = request.POST.get("result") == "approved"
     note = request.POST.get("note", "").strip()
 
@@ -1229,8 +1324,10 @@ def dispatch_review(request, pk):
 
 @login_required
 @require_POST
+@transaction.atomic
 def dispatch_final_review(request, pk):
-    dispatch = get_object_or_404(visible_dispatch_orders(request.user), pk=pk)
+    get_object_or_404(visible_dispatch_orders(request.user), pk=pk)
+    dispatch = DispatchOrder.objects.select_for_update().get(pk=pk)
     passed = request.POST.get("result") == "approved"
     note = request.POST.get("note", "").strip()
 
@@ -1291,8 +1388,10 @@ def dispatch_final_review(request, pk):
 
 @login_required
 @require_POST
+@transaction.atomic
 def settlement_create(request, pk):
-    dispatch = get_object_or_404(visible_dispatch_orders(request.user), pk=pk)
+    get_object_or_404(visible_dispatch_orders(request.user), pk=pk)
+    dispatch = DispatchOrder.objects.select_for_update().get(pk=pk)
     if not _is_safety(request.user):
         messages.error(request, "只有安数部维修岗可以创建结算单。")
         return redirect("dispatch_detail", pk=pk)
@@ -1331,6 +1430,7 @@ def settlement_create(request, pk):
 
 @login_required
 @require_POST
+@transaction.atomic
 def settlement_confirm(request, pk):
     settlement = get_object_or_404(
         SettlementOrder.objects.select_related(
@@ -1338,6 +1438,9 @@ def settlement_confirm(request, pk):
         ),
         pk=pk,
     )
+    # 锁结算单及其维修单，防止并发重复确认
+    settlement = SettlementOrder.objects.select_for_update().get(pk=pk)
+    RepairRequest.objects.select_for_update().get(pk=settlement.dispatch_order.repair_request_id)
     dispatch = settlement.dispatch_order
     if not _is_safety(request.user):
         messages.error(request, "只有安数部维修岗可以确认结算。")

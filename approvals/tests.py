@@ -1,10 +1,12 @@
 """派工现场媒体（多照片/视频）上传、设备档案、报修环节增强功能的单元测试。"""
+import io
 import shutil
 import tempfile
 from datetime import date, timedelta
 from decimal import Decimal
 from unittest import mock
 
+from PIL import Image
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
@@ -29,12 +31,10 @@ from .services import apply_stock_movement
 
 User = get_user_model()
 
-# 最小合法 PNG（1x1）
-PNG_BYTES = (
-    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
-    b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\xff\xff?\x00"
-    b"\x05\xfe\x02\xfe\xa3UvE\x00\x00\x00\x00IEND\xaeB`\x82"
-)
+# 最小合法 PNG（Pillow 实际生成，可通过内容校验）
+_buf = io.BytesIO()
+Image.new("RGB", (2, 2), (255, 0, 0)).save(_buf, format="PNG")
+PNG_BYTES = _buf.getvalue()
 # 带 ftyp 头的最小 MP4 占位内容
 MP4_BYTES = b"\x00\x00\x00\x18ftypmp42" + b"0" * 200
 
@@ -1404,3 +1404,143 @@ class SparePartViewTests(TestCase):
         self.assertIn("出入库台账", html)
         self.assertIn("期初入库", html)
         self.assertIn("13.00", html)
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class SecurityHardeningTests(TestCase):
+    """安全加固：伪造内容上传拦截、媒体鉴权、登录防爆破。"""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.region = Region.objects.create(code="UT-SEC", name="安全片区")
+        cls.site = Site.objects.create(
+            code="UT-SEC-SITE", name="安全油站", region=cls.region
+        )
+        cls.leader = User.objects.create_user("ut_sec_leader", password="x")
+        UserProfile.objects.create(user=cls.leader, role=UserProfile.Role.TEAM_LEADER)
+        cls.team = EngineeringTeam.objects.create(
+            code="UTSEC",
+            full_name="安全工程队",
+            credit_code="UT0000000000000002",
+            legal_person="测试法人",
+            bound_user=cls.leader,
+        )
+        cls.repair = RepairRequest.objects.create(
+            site=cls.site,
+            reporter=cls.leader,
+            repair_type=RepairRequest.RepairType.ELECTRICAL,
+            urgency=RepairRequest.Urgency.NORMAL,
+            description="安全加固单测",
+            status=RepairRequest.Status.APPROVED,
+        )
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self._media_root = tempfile.mkdtemp(prefix="ut_sec_media_")
+        self._override = override_settings(MEDIA_ROOT=self._media_root)
+        self._override.enable()
+
+    def tearDown(self):
+        self._override.disable()
+        shutil.rmtree(self._media_root, ignore_errors=True)
+
+    def _complete(self, client, dispatch, after_files, before_files=None):
+        data = {"content": "完工内容"}
+        if after_files is not None:
+            data["media"] = after_files
+        if before_files is not None:
+            data["before_media"] = before_files
+        return client.post(f"/dispatch/{dispatch.pk}/complete/", data)
+
+    def test_fake_image_content_rejected(self):
+        dispatch = DispatchOrder.objects.create(
+            repair_request=self.repair,
+            engineering_team=self.team,
+            leader=self.leader,
+            status=DispatchOrder.Status.IN_PROGRESS,
+        )
+        client = Client()
+        client.force_login(self.leader)
+        fake = SimpleUploadedFile("伪装.jpg", b"this is plain text", content_type="image/jpeg")
+        response = self._complete(client, dispatch, [fake], [SimpleUploadedFile("前.png", PNG_BYTES, content_type="image/png")])
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(DispatchMedia.objects.count(), 0)
+        dispatch.refresh_from_db()
+        self.assertEqual(dispatch.status, DispatchOrder.Status.IN_PROGRESS)
+
+    def test_fake_video_content_rejected(self):
+        dispatch = DispatchOrder.objects.create(
+            repair_request=self.repair,
+            engineering_team=self.team,
+            leader=self.leader,
+            status=DispatchOrder.Status.IN_PROGRESS,
+        )
+        client = Client()
+        client.force_login(self.leader)
+        real_png = SimpleUploadedFile("后.png", PNG_BYTES, content_type="image/png")
+        fake_video = SimpleUploadedFile("伪装.mp4", b"garbage-no-video-header", content_type="video/mp4")
+        response = self._complete(client, dispatch, [real_png, fake_video])
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(DispatchMedia.objects.count(), 0)
+
+    def test_media_requires_login(self):
+        dispatch = DispatchOrder.objects.create(
+            repair_request=self.repair,
+            engineering_team=self.team,
+            leader=self.leader,
+            status=DispatchOrder.Status.IN_PROGRESS,
+        )
+        media = DispatchMedia.objects.create(
+            dispatch_order=dispatch,
+            media_type=DispatchMedia.MediaType.IMAGE,
+            phase=DispatchMedia.Phase.AFTER,
+            file=SimpleUploadedFile("机密现场.png", PNG_BYTES, content_type="image/png"),
+            filename="机密现场.png",
+            uploaded_by=self.leader,
+        )
+        url = media.file.url
+
+        anon = Client()
+        resp = anon.get(url)
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/login", resp.url)
+
+        authed = Client()
+        authed.force_login(self.leader)
+        self.assertEqual(authed.get(url).status_code, 200)
+
+    def test_stored_filename_is_randomized(self):
+        dispatch = DispatchOrder.objects.create(
+            repair_request=self.repair,
+            engineering_team=self.team,
+            leader=self.leader,
+            status=DispatchOrder.Status.IN_PROGRESS,
+        )
+        client = Client()
+        client.force_login(self.leader)
+        self._complete(
+            client,
+            dispatch,
+            [SimpleUploadedFile("维修后.png", PNG_BYTES, content_type="image/png")],
+            [SimpleUploadedFile("维修前.png", PNG_BYTES, content_type="image/png")],
+        )
+        names = [m.file.name for m in DispatchMedia.objects.all()]
+        self.assertTrue(names)
+        for name in names:
+            base = name.rsplit("/", 1)[-1]
+            self.assertNotIn("维修", base)
+            self.assertNotIn("%", base)
+
+    def test_login_lockout_after_repeated_failures(self):
+        User.objects.create_user("ut_login_lock", password="CorrectPass123")
+        client = Client()
+        for _ in range(10):
+            client.post("/login/", {"username": "ut_login_lock", "password": "wrong"})
+        # 锁定后即便密码正确也拒绝
+        response = client.post(
+            "/login/", {"username": "ut_login_lock", "password": "CorrectPass123"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("登录失败次数过多", response.content.decode())
+        self.assertNotIn("_auth_user_id", client.session)
