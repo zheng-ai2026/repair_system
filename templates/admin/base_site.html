@@ -1,0 +1,10 @@
+{% extends "admin/base.html" %}
+
+{% block branding %}
+{{ block.super }}
+<a href="/"
+   style="float:left;margin:15px 0 0 22px;font-size:14px;font-weight:normal;
+          color:#f5dd5d;text-decoration:none;"
+   onmouseover="this.style.textDecoration='underline'"
+   onmouseout="this.style.textDecoration='none'">← 返回系统首页</a>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends 'approvals/base.html' %}
+{% block title %}审批待办{% endblock %}
+{% block content %}
+<h1>审批待办</h1>
+
+<div class="card">
+    {% if not is_approver %}
+    <p class="empty">你当前没有审批角色。如需审批权限，请联系管理员在后台配置「用户扩展」角色。</p>
+    {% elif repairs %}
+    <table>
+        <thead>
+            <tr>
+                <th>编号</th>
+                <th>油站</th>
+                <th>申请人</th>
+                <th>设备/类型</th>
+                <th>紧急程度</th>
+                <th>当前环节</th>
+                <th>提交时间</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in repairs %}
+            <tr>
+                <td><a href="{% url 'repair_detail' r.pk %}">{{ r.code }}</a></td>
+                <td>{{ r.site.name }}</td>
+                <td>{{ r.reporter.username }}</td>
+                <td>{{ r.equipment_name|default:"-" }}<br><span class="muted">{{ r.get_repair_type_display }}</span></td>
+                <td>{{ r.get_urgency_display }}</td>
+                <td><span class="badge b-{{ r.status }}">{{ r.get_status_display }}</span></td>
+                <td>{{ r.created_at|date:"Y-m-d H:i" }}</td>
+                <td><a class="btn btn-sm" href="{% url 'repair_detail' r.pk %}">去审批</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">当前没有待你审批的单据。</p>
+    {% endif %}
+</div>
+{% endblock %}

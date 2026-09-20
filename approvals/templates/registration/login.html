@@ -1,0 +1,23 @@
+{% extends 'approvals/base.html' %}
+{% block title %}登录 - 加油站维修管理系统{% endblock %}
+{% block content %}
+<div style="max-width: 380px; margin: 60px auto;">
+    <div class="card">
+        <h1 style="text-align:center;">用户登录</h1>
+        {% if form.errors %}
+        <ul class="messages"><li class="error">用户名或密码错误，请重试。</li></ul>
+        {% endif %}
+        <form method="post" action="{% url 'login' %}">
+            {% csrf_token %}
+            <p style="margin: 14px 0 6px; font-weight: bold; font-size: 14px;">用户名</p>
+            <input type="text" name="username" autofocus required
+                   style="width:100%;padding:10px;border:1px solid #ccc;border-radius:4px;font-size:14px;">
+            <p style="margin: 14px 0 6px; font-weight: bold; font-size: 14px;">密码</p>
+            <input type="password" name="password" required
+                   style="width:100%;padding:10px;border:1px solid #ccc;border-radius:4px;font-size:14px;">
+            <input type="hidden" name="next" value="{{ next }}">
+            <button type="submit" class="btn" style="width:100%;margin-top:20px;">登 录</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

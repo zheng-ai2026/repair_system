@@ -1,0 +1,98 @@
+{% extends 'approvals/base.html' %}
+{% block title %}提交维修单{% endblock %}
+{% block content %}
+<h1>提交维修单</h1>
+
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+
+    <div class="card">
+        <h2>基本信息</h2>
+        {% if form.non_field_errors %}
+        <ul class="messages">{% for e in form.non_field_errors %}<li class="error">{{ e }}</li>{% endfor %}</ul>
+        {% endif %}
+        <table>
+            {% for field in form %}
+            <tr>
+                <th style="width:140px;">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                </th>
+                <td>
+                    {{ field }}
+                    {% if field.help_text %}<div class="muted">{{ field.help_text }}</div>{% endif %}
+                    {% if field.errors %}<div style="color:#d9534f;font-size:13px;">{{ field.errors|striptags }}</div>{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>材料明细 <span class="muted">（可选；标准材料与自定义名称二选一，留空行自动忽略）</span></h2>
+        {{ formset.management_form }}
+        {% if formset.non_form_errors %}
+        <ul class="messages">{% for e in formset.non_form_errors %}<li class="error">{{ e }}</li>{% endfor %}</ul>
+        {% endif %}
+        <table id="material-table">
+            <thead>
+                <tr>
+                    <th style="width:220px;">标准材料</th>
+                    <th style="width:180px;">自定义材料名称</th>
+                    <th style="width:110px;">数量</th>
+                    <th style="width:130px;">单价（元）</th>
+                    <th style="width:80px;">删除</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for f in formset %}
+                <tr class="material-row">
+                    <td>{{ f.material }}{{ f.material.errors }}</td>
+                    <td>{{ f.custom_name }}{{ f.custom_name.errors }}</td>
+                    <td>{{ f.quantity }}{{ f.quantity.errors }}</td>
+                    <td>{{ f.unit_price }}{{ f.unit_price.errors }}</td>
+                    <td>{{ f.DELETE }} 删除</td>
+                    <td style="display:none;">{{ f.id }}{{ f.repair_request }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p style="margin-top:12px;">
+            <button type="button" class="btn btn-secondary btn-sm" id="add-row">+ 添加一行</button>
+        </p>
+    </div>
+
+    <div class="card">
+        <h2>现场照片 / 视频 <span class="muted">（可选，可多选；支持 jpg/png/gif/webp/bmp 与 mp4/mov/avi/mkv/webm；照片 ≤20MB，视频 ≤500MB）</span></h2>
+        <input type="file" name="media" multiple accept="image/*,video/*">
+        <div class="muted" style="margin-top:6px;">建议拍摄设备铭牌、故障部位、现场环境，便于审批人快速判断。</div>
+    </div>
+
+    <button type="submit" class="btn btn-success">提交维修单</button>
+    <a href="{% url 'repair_list' %}" class="btn btn-secondary">取消</a>
+</form>
+
+<script>
+(function () {
+    var table = document.getElementById('material-table');
+    var addBtn = document.getElementById('add-row');
+    var totalInput = document.getElementById('id_{{ formset.prefix }}-TOTAL_FORMS');
+
+    addBtn.addEventListener('click', function () {
+        var rows = table.tBodies[0].querySelectorAll('tr.material-row');
+        var row = rows[rows.length - 1];
+        var newRow = row.cloneNode(true);
+        var newIndex = parseInt(totalInput.value, 10);
+        newRow.innerHTML = newRow.innerHTML.replace(
+            /{{ formset.prefix }}-(\d+)-/g,
+            '{{ formset.prefix }}-' + newIndex + '-'
+        );
+        newRow.querySelectorAll('input, select').forEach(function (el) {
+            if (el.type !== 'hidden') el.value = '';
+            if (el.type === 'checkbox') el.checked = false;
+        });
+        table.tBodies[0].appendChild(newRow);
+        totalInput.value = newIndex + 1;
+    });
+})();
+</script>
+{% endblock %}

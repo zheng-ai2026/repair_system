@@ -1,0 +1,56 @@
+{% extends 'approvals/base.html' %}
+{% block title %}维修单列表{% endblock %}
+{% block content %}
+<h1>维修单列表</h1>
+
+<div class="card">
+    <form method="get" class="filter-bar">
+        <select name="status">
+            <option value="">全部状态</option>
+            {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if value == current_status %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <input type="text" name="q" value="{{ keyword }}" placeholder="编号 / 设备 / 油站名称">
+        <button type="submit" class="btn btn-sm">筛选</button>
+        <a href="{% url 'repair_list' %}" class="btn btn-secondary btn-sm">重置</a>
+        <span style="flex:1;"></span>
+        <a href="{% url 'repair_add' %}" class="btn btn-success btn-sm">+ 提交维修单</a>
+    </form>
+
+    {% if repairs %}
+    <table>
+        <thead>
+            <tr>
+                <th>编号</th>
+                <th>油站</th>
+                <th>申请人</th>
+                <th>维修类型</th>
+                <th>紧急程度</th>
+                <th>设备名称</th>
+                <th>预算（元）</th>
+                <th>状态</th>
+                <th>创建时间</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in repairs %}
+            <tr>
+                <td><a href="{% url 'repair_detail' r.pk %}">{{ r.code|default:"（未编号）" }}</a></td>
+                <td>{{ r.site.name }}</td>
+                <td>{{ r.reporter.username }}</td>
+                <td>{{ r.get_repair_type_display }}</td>
+                <td>{{ r.get_urgency_display }}</td>
+                <td>{{ r.equipment_name|default:"-" }}</td>
+                <td>{{ r.budget_amount|default:"-" }}</td>
+                <td><span class="badge b-{{ r.status }}">{{ r.get_status_display }}</span></td>
+                <td>{{ r.created_at|date:"Y-m-d H:i" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">暂无符合条件的维修单。</p>
+    {% endif %}
+</div>
+{% endblock %}

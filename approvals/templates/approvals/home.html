@@ -1,0 +1,74 @@
+{% extends 'approvals/base.html' %}
+{% block title %}首页 - 加油站维修管理系统{% endblock %}
+{% block content %}
+<h1>工作台</h1>
+
+{% if pending_for_me %}
+<div class="card" style="border-left:4px solid #f0ad4e;">
+    <h2>我的审批待办</h2>
+    <div class="stat-grid">
+        <div class="stat-box">
+            <div class="num">{{ pending_for_me }}</div>
+            <div class="label">待我审批的维修单</div>
+        </div>
+    </div>
+    <p class="muted" style="margin-top:12px;">
+        <a class="btn btn-sm" href="{% url 'approval_queue' %}">进入审批待办 →</a>
+    </p>
+</div>
+{% endif %}
+
+{% if my_dispatch_in_progress %}
+<div class="card" style="border-left:4px solid #5bc0de;">
+    <h2>我的派工任务</h2>
+    <div class="stat-grid">
+        <div class="stat-box">
+            <div class="num">{{ my_dispatch_pending_accept }}</div>
+            <div class="label">待接单</div>
+        </div>
+        <div class="stat-box">
+            <div class="num">{{ my_dispatch_in_progress }}</div>
+            <div class="label">进行中的派工单</div>
+        </div>
+    </div>
+    <p style="margin-top:12px;"><a class="btn btn-sm" href="{% url 'dispatch_list' %}">查看派工单 →</a></p>
+</div>
+{% endif %}
+
+{% if low_stock_count %}
+<div class="card" style="border-left:4px solid #d9534f;">
+    <h2>备件库存预警</h2>
+    <div class="stat-grid">
+        <div class="stat-box">
+            <div class="num" style="color:#d9534f;">{{ low_stock_count }}</div>
+            <div class="label">低于安全库存的备件</div>
+        </div>
+    </div>
+    <p style="margin-top:12px;">
+        <a class="btn btn-sm" href="{% url 'sparepart_list' %}?low=1">查看低库存备件并补货 →</a>
+    </p>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2>维修单概览</h2>
+    <div class="stat-grid">
+        <div class="stat-box"><div class="num">{{ my_submitted }}</div><div class="label">我提交的</div></div>
+        <div class="stat-box"><div class="num">{{ in_approval }}</div><div class="label">审批流转中</div></div>
+        <div class="stat-box"><div class="num">{{ accepted }}</div><div class="label">已通过/验收中</div></div>
+        <div class="stat-box"><div class="num">{{ settled }}</div><div class="label">已结算</div></div>
+    </div>
+    <p style="margin-top:18px;">
+        <a class="btn" href="{% url 'repair_add' %}">+ 提交维修单</a>
+        <a class="btn btn-secondary" href="{% url 'repair_list' %}">查看维修单列表</a>
+    </p>
+</div>
+
+{% if not user.profile and not user.is_superuser %}
+<div class="card">
+    <ul class="messages"><li class="error">
+        你的账号尚未配置角色与所属油站/片区，请联系管理员在后台为「用户扩展」补充信息，否则数据范围将受限。
+    </li></ul>
+</div>
+{% endif %}
+{% endblock %}

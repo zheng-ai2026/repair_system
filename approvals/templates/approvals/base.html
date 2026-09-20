@@ -1,0 +1,163 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}加油站维修管理系统{% endblock %}</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: "Microsoft YaHei", sans-serif;
+            background: #f4f6f9;
+            margin: 0;
+            color: #2c3e50;
+        }
+        .topbar {
+            background: #2c5468;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            height: 52px;
+        }
+        .topbar .brand { font-size: 17px; font-weight: bold; margin-right: 32px; color: #fff; text-decoration: none; }
+        .topbar nav a {
+            color: #d6e4ec;
+            text-decoration: none;
+            margin-right: 10px;
+            font-size: 14px;
+            padding: 5px 12px;
+            border-radius: 4px;
+        }
+        .topbar nav a:hover, .topbar nav a.active { color: #fff; }
+        .topbar nav a:hover { background: rgba(255,255,255,0.10); }
+        .topbar nav a.active {
+            background: rgba(255,255,255,0.18);
+        }
+        .back-home {
+            margin-top: 8px;
+            text-align: center;
+            padding: 18px 0 8px;
+        }
+        .back-home .btn { min-width: 160px; }
+        .topbar .spacer { flex: 1; }
+        .topbar .user-info { font-size: 13px; color: #d6e4ec; }
+        .topbar .user-info form { display: inline; margin-left: 14px; }
+        .topbar .user-info button {
+            background: none; border: 1px solid #8fb2c4; color: #fff;
+            border-radius: 4px; padding: 3px 12px; cursor: pointer; font-size: 13px;
+        }
+        .container { max-width: 1100px; margin: 24px auto; padding: 0 20px; }
+        .card {
+            background: #fff; border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            padding: 24px; margin-bottom: 20px;
+        }
+        h1 { font-size: 22px; margin: 0 0 20px; }
+        h2 { font-size: 17px; margin: 0 0 14px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px 12px; border-bottom: 1px solid #eef1f4; text-align: left; font-size: 14px; }
+        th { background: #f0f4f7; color: #48657a; white-space: nowrap; }
+        tr:hover td { background: #f8fbfd; }
+        .btn {
+            display: inline-block; padding: 8px 18px; background: #417690; color: #fff;
+            text-decoration: none; border: none; border-radius: 4px; cursor: pointer;
+            font-size: 14px;
+        }
+        .btn:hover { background: #2c5468; }
+        .btn-secondary { background: #7f8c99; }
+        .btn-danger { background: #d9534f; }
+        .btn-success { background: #5cb85c; }
+        .btn-sm { padding: 4px 12px; font-size: 13px; }
+        .badge {
+            display: inline-block; padding: 2px 10px; border-radius: 10px;
+            font-size: 12px; color: #fff; white-space: nowrap;
+        }
+        .b-draft { background: #95a5a6; }
+        .b-pending_region_admin, .b-pending_region_manager, .b-pending_safety_repair,
+        .b-pending_deputy_gm, .b-pending_gm, .b-pending_chairman { background: #f0ad4e; }
+        .b-approved { background: #5cb85c; }
+        .b-accepting { background: #5bc0de; }
+        .b-settled { background: #2c5468; }
+        .b-success { background: #5cb85c; }
+        .b-failed { background: #d9534f; }
+        .b-in_progress, .b-accepting_d { background: #5bc0de; }
+        .b-pending_accept { background: #f0ad4e; }
+        .b-rejected { background: #d9534f; }
+        .b-admin_review, .b-safety_review { background: #f0ad4e; }
+        .b-closed { background: #2c5468; }
+        .b-normal { background: #5cb85c; }
+        .b-fault { background: #d9534f; }
+        .b-deactivated { background: #95a5a6; }
+        .empty { color: #999; padding: 24px 0; text-align: center; }
+        .messages { list-style: none; padding: 0; margin: 0 0 16px; }
+        .messages li {
+            padding: 10px 16px; border-radius: 4px; margin-bottom: 8px; font-size: 14px;
+        }
+        .messages .success { background: #e6f6e6; color: #2d7a2d; border: 1px solid #b7e0b7; }
+        .messages .error { background: #fbeaea; color: #a02c2c; border: 1px solid #f0c0c0; }
+        .messages .info { background: #e8f2f8; color: #2c5468; border: 1px solid #bfd8e8; }
+        form.inline { display: inline; }
+        .filter-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+        .filter-bar select, .filter-bar input[type=text] {
+            padding: 7px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;
+        }
+        .stat-grid { display: flex; gap: 16px; flex-wrap: wrap; }
+        .stat-box {
+            flex: 1; min-width: 150px; background: #f7fafc; border: 1px solid #e3edf3;
+            border-radius: 8px; padding: 18px; text-align: center;
+        }
+        .stat-box .num { font-size: 30px; font-weight: bold; color: #417690; }
+        .stat-box .label { font-size: 13px; color: #7f8c99; margin-top: 6px; }
+        .muted { color: #95a5a6; font-size: 13px; }
+    </style>
+</head>
+<body>
+    {% if user.is_authenticated %}
+    <div class="topbar">
+        <a class="brand" href="{% url 'home' %}">加油站维修管理系统</a>
+        <nav>
+            <a href="{% url 'home' %}" {% if request.resolver_match.url_name == 'home' %}class="active"{% endif %}>首页</a>
+            <a href="{% url 'repair_list' %}" {% if request.resolver_match.url_name == 'repair_list' %}class="active"{% endif %}>维修单</a>
+            <a href="{% url 'equipment_list' %}" {% if request.resolver_match.url_name|slice:":9" == 'equipment' %}class="active"{% endif %}>设备档案</a>
+            <a href="{% url 'approval_queue' %}" {% if request.resolver_match.url_name == 'approval_queue' %}class="active"{% endif %}>审批待办</a>
+            <a href="{% url 'dispatch_list' %}" {% if request.resolver_match.url_name == 'dispatch_list' %}class="active"{% endif %}>派工管理</a>
+            <a href="{% url 'sparepart_list' %}" {% if request.resolver_match.url_name|slice:":9" == 'sparepart' %}class="active"{% endif %}>备件库存</a>
+            <a href="{% url 'notification_list' %}" {% if request.resolver_match.url_name == 'notification_list' %}class="active"{% endif %}>通知
+                {% if unread_notification_count %}
+                <span style="background:#d9534f;border-radius:9px;padding:0 6px;font-size:12px;">{{ unread_notification_count }}</span>
+                {% endif %}
+            </a>
+            {% if user.is_staff %}<a href="/admin/">后台管理</a>{% endif %}
+        </nav>
+        <div class="spacer"></div>
+        <div class="user-info">
+            {{ user.username }}
+            {% if user.profile %}（{{ user.profile.get_role_display }}）{% endif %}
+            <form method="post" action="{% url 'logout' %}">
+                {% csrf_token %}
+                <button type="submit">退出</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="container">
+        {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}
+            <li class="{{ message.tags }}">{{ message }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% block content %}{% endblock %}
+
+        {% if user.is_authenticated and request.resolver_match.url_name != 'home' %}
+        <div class="back-home">
+            <a class="btn btn-secondary" href="{% url 'home' %}">← 返回首页</a>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

@@ -1,0 +1,322 @@
+{% extends 'approvals/base.html' %}
+{% block title %}派工单 {{ dispatch.code }}{% endblock %}
+{% block content %}
+<p>
+    <a href="{% url 'dispatch_list' %}" class="muted" style="text-decoration:none;">← 返回派工单列表</a>
+</p>
+
+<div class="card">
+    <h2>
+        派工单 {{ dispatch.code }}
+        <span class="badge b-{{ dispatch.status }}">{{ dispatch.get_status_display }}</span>
+        {% if dispatch.is_rejected %}<span class="badge b-failed">拒收返工</span>{% endif %}
+    </h2>
+    <table>
+        <tr><th style="width:120px;">维修单</th>
+        <td><a href="{% url 'repair_detail' dispatch.repair_request.pk %}">{{ dispatch.repair_request.code }}</a></td>
+        <th style="width:120px;">维修单状态</th>
+        <td><span class="badge b-{{ dispatch.repair_request.status }}">{{ dispatch.repair_request.get_status_display }}</span></td></tr>
+        <tr><th>油站</th><td>{{ dispatch.repair_request.site.name }}</td>
+            <th>工程队</th><td>{{ dispatch.engineering_team.full_name }}（{{ dispatch.engineering_team.code }}）</td></tr>
+        <tr><th>负责人</th><td>{{ dispatch.leader.username|default:"-" }}</td>
+            <th>改派次数</th><td>{{ dispatch.reassigned_times }} 次</td></tr>
+        <tr><th>创建时间</th><td>{{ dispatch.created_at|date:"Y-m-d H:i" }}</td>
+            <th>开工时间</th><td>{{ dispatch.started_at|date:"Y-m-d H:i"|default:"-" }}</td></tr>
+        <tr><th>完成时间</th><td>{{ dispatch.completed_at|date:"Y-m-d H:i"|default:"-" }}</td>
+            <th>系统计算工时</th><td>{% if dispatch.elapsed_hours is not None %}{{ dispatch.elapsed_hours }} 小时{% else %}-{% endif %}</td></tr>
+        <tr><th>维修工时</th><td>{% if dispatch.work_hours %}{{ dispatch.work_hours }} 小时{% else %}-{% endif %}</td>
+            <th>拒收标识</th><td>{{ dispatch.is_rejected|yesno:"是,否" }}</td></tr>
+        {% if dispatch.reject_reason %}
+        <tr><th>拒单理由</th><td colspan="3" style="white-space:pre-wrap;color:#c0392b;">{{ dispatch.reject_reason }}</td></tr>
+        {% endif %}
+        <tr><th>维修内容</th><td colspan="3" style="white-space:pre-wrap;">{{ dispatch.content|default:"-" }}</td></tr>
+        {% if dispatch.completed_at %}
+        <tr><th>实际故障情况</th><td colspan="3" style="white-space:pre-wrap;">{{ dispatch.actual_fault|default:"-" }}</td></tr>
+        <tr><th>维修方案</th><td colspan="3" style="white-space:pre-wrap;">{{ dispatch.repair_plan|default:"-" }}</td></tr>
+        <tr><th>实际维修措施</th><td colspan="3" style="white-space:pre-wrap;">{{ dispatch.actual_measures|default:"-" }}</td></tr>
+        {% endif %}
+        {% if dispatch.photo and not media_before and not media_after %}
+        <tr><th>现场照片</th><td colspan="3">
+            <a href="{{ dispatch.photo.url }}" target="_blank">
+                <img src="{{ dispatch.photo.url }}" style="max-width:260px;border-radius:6px;border:1px solid #eee;">
+            </a>
+            <div class="muted">历史单图记录</div>
+        </td></tr>
+        {% endif %}
+    </table>
+</div>
+
+{% if can_accept %}
+<div class="card" style="border-left:4px solid #5bc0de;">
+    <h2>接单确认</h2>
+    <p class="muted">该派工单已派发至你所在的工程队，请确认是否接单。接单后将记录开工时间并进入维修阶段。</p>
+    <form method="post" action="{% url 'dispatch_accept' dispatch.pk %}" class="inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-success">确认接单，开始维修</button>
+    </form>
+    <form method="post" action="{% url 'dispatch_reject' dispatch.pk %}" style="margin-top:14px;">
+        {% csrf_token %}
+        <label>如无法承接，请填写拒单理由（必填，提交后安数部将改派其他工程队）</label><br>
+        {{ reject_form.reject_reason }}
+        <p style="margin-top:8px;">
+            <button type="submit" class="btn btn-danger"
+                    onclick="return confirm('确认拒单？拒单后该单据将退回安数部重新派工。');">拒单</button>
+        </p>
+    </form>
+</div>
+{% endif %}
+
+{% if can_reassign %}
+<div class="card" style="border-left:4px solid #f0ad4e;">
+    <h2>安数部改派</h2>
+    <p class="muted">工程队已拒单，单据退回待派工状态。请改派其他工程队，改派后新工程队需重新接单。</p>
+    {% if dispatch.reject_reason %}
+    <p><strong>拒单理由：</strong><span style="color:#c0392b;">{{ dispatch.reject_reason }}</span></p>
+    {% endif %}
+    <form method="post" action="{% url 'dispatch_reassign' dispatch.pk %}">
+        {% csrf_token %}
+        <p style="margin:8px 0;">
+            <label>改派工程队 *</label><br>
+            {{ reassign_form.engineering_team }}
+        </p>
+        <p style="margin:8px 0;">
+            <label>负责人（可选，不选则使用工程队绑定账号）</label><br>
+            {{ reassign_form.leader }}
+        </p>
+        <button type="submit" class="btn">确认改派</button>
+    </form>
+</div>
+{% endif %}
+
+{% if media_before %}
+<div class="card">
+    <h2>维修前照片与视频（{{ media_before|length }} 个）</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:14px;">
+        {% for m in media_before %}
+        <div style="width:240px;border:1px solid #eee;border-radius:8px;overflow:hidden;background:#fafbfc;">
+            {% if m.media_type == 'image' %}
+            <a href="{{ m.file.url }}" target="_blank">
+                <img src="{{ m.file.url }}" style="width:100%;height:160px;object-fit:cover;display:block;">
+            </a>
+            {% else %}
+            <video controls preload="metadata" style="width:100%;height:160px;object-fit:cover;background:#000;display:block;">
+                <source src="{{ m.file.url }}">
+                您的浏览器不支持视频播放，<a href="{{ m.file.url }}" target="_blank">点此下载</a>。
+            </video>
+            {% endif %}
+            <div style="padding:8px 10px;font-size:12px;color:#7f8c99;">
+                <span class="badge b-draft">维修前</span>
+                {{ m.get_media_type_display }} · {{ m.uploaded_by.username|default:"-" }}<br>
+                <span title="{{ m.filename }}">{{ m.filename|truncatechars:26 }}</span><br>
+                {{ m.created_at|date:"Y-m-d H:i" }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% if media_after %}
+<div class="card">
+    <h2>维修后照片与视频（{{ media_after|length }} 个）</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:14px;">
+        {% for m in media_after %}
+        <div style="width:240px;border:1px solid #eee;border-radius:8px;overflow:hidden;background:#fafbfc;">
+            {% if m.media_type == 'image' %}
+            <a href="{{ m.file.url }}" target="_blank">
+                <img src="{{ m.file.url }}" style="width:100%;height:160px;object-fit:cover;display:block;">
+            </a>
+            {% else %}
+            <video controls preload="metadata" style="width:100%;height:160px;object-fit:cover;background:#000;display:block;">
+                <source src="{{ m.file.url }}">
+                您的浏览器不支持视频播放，<a href="{{ m.file.url }}" target="_blank">点此下载</a>。
+            </video>
+            {% endif %}
+            <div style="padding:8px 10px;font-size:12px;color:#7f8c99;">
+                <span class="badge b-closed">维修后</span>
+                {{ m.get_media_type_display }} · {{ m.uploaded_by.username|default:"-" }}<br>
+                <span title="{{ m.filename }}">{{ m.filename|truncatechars:26 }}</span><br>
+                {{ m.created_at|date:"Y-m-d H:i" }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% if can_complete %}
+<div class="card" style="border-left:4px solid #5bc0de;">
+    <h2>完工上报</h2>
+    <form method="post" action="{% url 'dispatch_complete' dispatch.pk %}" enctype="multipart/form-data">
+        {% csrf_token %}
+        <p style="margin:8px 0;">
+            <label>补充/更新维修内容</label><br>
+            {{ complete_form.content }}
+        </p>
+        <p style="margin:8px 0;">
+            <label>实际故障情况</label><br>
+            {{ complete_form.actual_fault }}
+        </p>
+        <p style="margin:8px 0;">
+            <label>维修方案</label><br>
+            {{ complete_form.repair_plan }}
+        </p>
+        <p style="margin:8px 0;">
+            <label>实际维修措施</label><br>
+            {{ complete_form.actual_measures }}
+        </p>
+        <p style="margin:8px 0;">
+            <label>维修工时（小时）</label><br>
+            {{ complete_form.work_hours }}
+        </p>
+        <p style="margin:8px 0;">
+            <label>维修前照片/视频（可选，可多选，支持 jpg/png/gif/webp 与 mp4/mov/avi/mkv/webm；照片 ≤20MB，视频 ≤500MB）</label><br>
+            <input type="file" name="before_media" multiple accept="image/*,video/*">
+        </p>
+        <p style="margin:8px 0;">
+            <label>维修后照片/视频（至少 1 个，可多选，格式要求同上）</label><br>
+            <input type="file" name="media" multiple accept="image/*,video/*" required>
+        </p>
+        <button type="submit" class="btn btn-success">提交完工，申请验收</button>
+    </form>
+</div>
+{% endif %}
+
+{% with stock_movements=dispatch.stock_movements.all %}
+{% if stock_movements %}
+<div class="card">
+    <h2>备件领用记录（{{ stock_movements|length }} 条）</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>时间</th>
+                <th>备件</th>
+                <th>数量</th>
+                <th>出库后结存</th>
+                <th>经办人</th>
+                <th>备注</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sm in stock_movements %}
+            <tr>
+                <td style="white-space:nowrap;">{{ sm.created_at|date:"Y-m-d H:i" }}</td>
+                <td><a href="{% url 'sparepart_detail' sm.spare_part.pk %}">{{ sm.spare_part.code }} {{ sm.spare_part.name }}</a></td>
+                <td>-{{ sm.quantity }}{{ sm.spare_part.unit }}</td>
+                <td>{{ sm.balance_after }}</td>
+                <td>{{ sm.operator.username|default:"-" }}</td>
+                <td>{{ sm.remark|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endwith %}
+
+{% if rating %}
+<div class="card" style="border-left:4px solid #2c5468;">
+    <h2>验收评价（{{ rating.average_score }} 星）</h2>
+    <table>
+        <tr><th style="width:120px;">响应速度</th><td>{{ rating.response_speed }} 星</td>
+            <th style="width:120px;">技术水平</th><td>{{ rating.technical_level }} 星</td></tr>
+        <tr><th>服务态度</th><td>{{ rating.service_attitude }} 星</td>
+            <th>评价时间</th><td>{{ rating.created_at|date:"Y-m-d H:i" }}</td></tr>
+        {% if rating.comment %}
+        <tr><th>评价内容</th><td colspan="3" style="white-space:pre-wrap;">{{ rating.comment }}</td></tr>
+        {% endif %}
+    </table>
+</div>
+{% elif can_rate %}
+<div class="card" style="border-left:4px solid #2c5468;">
+    <h2>验收评价</h2>
+    <p class="muted">工程队已完工上报，请对本次维修服务进行评价（提交后不可修改）。</p>
+    <form method="post" action="{% url 'dispatch_rate' dispatch.pk %}">
+        {% csrf_token %}
+        <table>
+            <tr><th style="width:120px;">响应速度</th><td>{{ rating_form.response_speed }}</td></tr>
+            <tr><th>技术水平</th><td>{{ rating_form.technical_level }}</td></tr>
+            <tr><th>服务态度</th><td>{{ rating_form.service_attitude }}</td></tr>
+        </table>
+        <p style="margin:8px 0;">
+            <label>评价内容（可选）</label><br>
+            {{ rating_form.comment }}
+        </p>
+        <button type="submit" class="btn btn-success">提交评价</button>
+    </form>
+</div>
+{% endif %}
+
+{% if can_admin_review %}
+<div class="card" style="border-left:4px solid #f0ad4e;">
+    <h2>管理员审核</h2>
+    <form method="post" action="{% url 'dispatch_review' dispatch.pk %}">
+        {% csrf_token %}
+        <textarea name="note" rows="2"
+                  style="width:100%;padding:10px;border:1px solid #ccc;border-radius:4px;font-size:14px;"
+                  placeholder="审核意见（拒收时填写原因）"></textarea>
+        <p style="margin-top:10px;">
+            <button type="submit" name="result" value="approved" class="btn btn-success">审核通过</button>
+            <button type="submit" name="result" value="rejected" class="btn btn-danger"
+                    onclick="return confirm('确认拒收？派工单将退回工程队返工。');">拒收返工</button>
+        </p>
+    </form>
+</div>
+{% endif %}
+
+{% if can_final_review %}
+<div class="card" style="border-left:4px solid #2c5468;">
+    <h2>安数部审核（验收闭环）</h2>
+    <form method="post" action="{% url 'dispatch_final_review' dispatch.pk %}">
+        {% csrf_token %}
+        <textarea name="note" rows="2"
+                  style="width:100%;padding:10px;border:1px solid #ccc;border-radius:4px;font-size:14px;"
+                  placeholder="审核意见（拒收时填写原因）"></textarea>
+        <p style="margin-top:10px;">
+            <button type="submit" name="result" value="approved" class="btn btn-success">闭环通过</button>
+            <button type="submit" name="result" value="rejected" class="btn btn-danger"
+                    onclick="return confirm('确认拒收？派工单将退回工程队返工。');">拒收返工</button>
+        </p>
+    </form>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2>结算信息</h2>
+    {% if settlement %}
+    <table>
+        <tr><th style="width:120px;">结算单编号</th><td>{{ settlement.code }}</td>
+            <th style="width:120px;">结算金额</th><td>{{ settlement.amount }} 元</td></tr>
+        <tr><th>创建人</th><td>{{ settlement.creator.username|default:"-" }}</td>
+            <th>创建时间</th><td>{{ settlement.created_at|date:"Y-m-d H:i" }}</td></tr>
+        <tr><th>状态</th><td colspan="3">
+            {% if settlement.is_settled %}
+            <span class="badge b-closed">已结算</span>
+            {% else %}
+            <span class="badge b-draft">未结算</span>
+            {% if can_confirm_settlement %}
+            <form method="post" action="{% url 'settlement_confirm' settlement.pk %}" class="inline" style="margin-left:12px;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-success btn-sm"
+                        onclick="return confirm('确认该结算单已支付并结算？维修单流程将闭环。');">确认已支付并结算</button>
+            </form>
+            {% endif %}
+            {% endif %}
+        </td></tr>
+    </table>
+    {% elif can_settle %}
+    <form method="post" action="{% url 'settlement_create' dispatch.pk %}">
+        {% csrf_token %}
+        <p style="margin:8px 0;">
+            <label>结算金额（元）</label><br>
+            {{ settlement_form.amount }}
+        </p>
+        <button type="submit" class="btn">创建结算单</button>
+    </form>
+    {% else %}
+    <p class="empty">
+        {% if dispatch.status == 'closed' %}结算单尚未创建。{% else %}验收闭环后可创建结算单。{% endif %}
+    </p>
+    {% endif %}
+</div>
+{% endblock %}

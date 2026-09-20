@@ -1,0 +1,80 @@
+{% extends 'approvals/base.html' %}
+{% block title %}备件库存{% endblock %}
+{% block content %}
+<h1>备件库存</h1>
+
+<div class="card">
+    <form method="get" class="filter-bar">
+        <select name="status">
+            <option value="">全部状态</option>
+            <option value="active" {% if status == 'active' %}selected{% endif %}>启用中</option>
+            <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>已停用</option>
+        </select>
+        <input type="text" name="q" value="{{ keyword }}" placeholder="编码 / 名称 / 规格型号">
+        <label style="font-size:13px;color:#7f8c99;">
+            <input type="checkbox" name="low" value="1" {% if show_low %}checked{% endif %}
+                   onchange="this.form.submit();"> 仅看低库存
+        </label>
+        <button type="submit" class="btn btn-sm">筛选</button>
+        <a href="{% url 'sparepart_list' %}" class="btn btn-secondary btn-sm">重置</a>
+        <span style="flex:1;"></span>
+        {% if low_count %}
+        <span class="badge b-failed" style="margin-right:10px;">低库存 {{ low_count }} 项</span>
+        {% endif %}
+        {% if can_manage %}
+        <a href="{% url 'sparepart_add' %}" class="btn btn-success btn-sm">+ 新增备件</a>
+        {% endif %}
+    </form>
+
+    {% if parts %}
+    <table>
+        <thead>
+            <tr>
+                <th>备件编码</th>
+                <th>备件名称</th>
+                <th>规格型号</th>
+                <th>单位</th>
+                <th>当前库存</th>
+                <th>安全库存</th>
+                <th>参考单价</th>
+                <th>状态</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in parts %}
+            <tr {% if p.is_low_stock and p.is_active %}style="background:#fdf3f2;"{% endif %}>
+                <td><a href="{% url 'sparepart_detail' p.pk %}">{{ p.code }}</a></td>
+                <td>{{ p.name }}</td>
+                <td>{{ p.spec|default:"-" }}</td>
+                <td>{{ p.unit|default:"-" }}</td>
+                <td>
+                    <strong>{{ p.stock_quantity }}</strong>
+                    {% if p.is_low_stock and p.is_active %}
+                    <span class="badge b-failed">低库存</span>
+                    {% endif %}
+                </td>
+                <td>{{ p.safety_stock }}</td>
+                <td>{% if p.reference_price is not None %}{{ p.reference_price }} 元{% else %}-{% endif %}</td>
+                <td>
+                    {% if p.is_active %}
+                    <span class="badge b-normal">启用</span>
+                    {% else %}
+                    <span class="badge b-deactivated">停用</span>
+                    {% endif %}
+                </td>
+                <td style="white-space:nowrap;">
+                    <a class="btn btn-secondary btn-sm" href="{% url 'sparepart_detail' p.pk %}">台账</a>
+                    {% if can_manage %}
+                    <a class="btn btn-sm" href="{% url 'sparepart_edit' p.pk %}">编辑</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">暂无符合条件的备件档案。</p>
+    {% endif %}
+</div>
+{% endblock %}

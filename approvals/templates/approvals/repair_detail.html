@@ -1,0 +1,245 @@
+{% extends 'approvals/base.html' %}
+{% block title %}维修单 {{ repair.code }}{% endblock %}
+{% block content %}
+<p>
+    <a href="{% url 'repair_list' %}" class="muted" style="text-decoration:none;">← 返回列表</a>
+</p>
+
+<div class="card">
+    <h2>
+        维修单 {{ repair.code|default:"（未编号）" }}
+        <span class="badge b-{{ repair.status }}">{{ repair.get_status_display }}</span>
+        {% if repair.urgency == 'urgent' or repair.urgency == 'critical' %}
+        <span class="badge" style="background:#d9534f;">{{ repair.get_urgency_display }}{% if repair.urgency == 'critical' %}·快速通道{% endif %}</span>
+        {% endif %}
+    </h2>
+    <table>
+        <tr><th style="width:140px;">申请单位</th><td>{{ repair.site.name }}（{{ repair.site.code }}）</td>
+            <th style="width:140px;">所属片区</th><td>{{ repair.site.region.name|default:"-" }}</td></tr>
+        <tr><th>申请人</th><td>{{ repair.reporter.username }}</td>
+            <th>创建时间</th><td>{{ repair.created_at|date:"Y-m-d H:i" }}</td></tr>
+        <tr><th>维修类型</th><td>{{ repair.get_repair_type_display }}</td>
+            <th>紧急程度</th><td>{{ repair.get_urgency_display }}</td></tr>
+        <tr><th>设备名称</th><td>
+            {% if repair.equipment %}
+            <a href="{% url 'equipment_detail' repair.equipment.pk %}">{{ repair.equipment.name }}（{{ repair.equipment.code }}）</a>
+            {% else %}{{ repair.equipment_name|default:"-" }}{% endif %}
+        </td>
+            <th>预算总额</th><td>{% if repair.budget_amount %}{{ repair.budget_amount }} 元{% else %}-{% endif %}</td></tr>
+        <tr><th>追加来源</th><td colspan="3">
+            {% if repair.parent %}
+            <a href="{% url 'repair_detail' repair.parent.pk %}">{{ repair.parent.code }}</a>
+            {% else %}独立单据{% endif %}
+        </td></tr>
+        <tr><th>问题描述</th><td colspan="3" style="white-space:pre-wrap;">{{ repair.description }}</td></tr>
+    </table>
+</div>
+
+{% if media_files %}
+<div class="card">
+    <h2>报修现场照片与视频（{{ media_files|length }} 个）</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:14px;">
+        {% for m in media_files %}
+        <div style="width:240px;border:1px solid #eee;border-radius:8px;overflow:hidden;background:#fafbfc;">
+            {% if m.media_type == 'image' %}
+            <a href="{{ m.file.url }}" target="_blank">
+                <img src="{{ m.file.url }}" style="width:100%;height:160px;object-fit:cover;display:block;">
+            </a>
+            {% else %}
+            <video controls preload="metadata" style="width:100%;height:160px;object-fit:cover;background:#000;display:block;">
+                <source src="{{ m.file.url }}">
+                您的浏览器不支持视频播放，<a href="{{ m.file.url }}" target="_blank">点此下载</a>。
+            </video>
+            {% endif %}
+            <div style="padding:8px 10px;font-size:12px;color:#7f8c99;">
+                {{ m.get_media_type_display }} · {{ m.uploaded_by.username|default:"-" }}<br>
+                <span title="{{ m.filename }}">{{ m.filename|truncatechars:26 }}</span><br>
+                {{ m.created_at|date:"Y-m-d H:i" }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2>材料明细</h2>
+    {% if material_items %}
+    <table>
+        <thead>
+            <tr><th>材料</th><th>规格</th><th>单位</th><th>数量</th><th>单价（元）</th><th>小计（元）</th></tr>
+        </thead>
+        <tbody>
+            {% for item in material_items %}
+            <tr>
+                <td>
+                    {% if item.material %}{{ item.material.name }}{% else %}{{ item.custom_name }}（自定义）{% endif %}
+                </td>
+                <td>{{ item.material.spec|default:"-" }}</td>
+                <td>{{ item.material.unit|default:"-" }}</td>
+                <td>{{ item.quantity }}</td>
+                <td>{{ item.unit_price }}</td>
+                <td>{{ item.subtotal }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr><th colspan="5" style="text-align:right;">材料合计</th><th>{{ material_total }} 元</th></tr>
+        </tfoot>
+    </table>
+    {% else %}
+    <p class="empty">未填写材料明细。</p>
+    {% endif %}
+</div>
+
+{% if can_approve %}
+<div class="card" style="border-left:4px solid #f0ad4e;">
+    <h2>审批操作 <span class="muted">（当前环节：{{ repair.get_status_display }}）</span></h2>
+    <form method="post" action="{% url 'approve' repair.pk %}">
+        {% csrf_token %}
+        {% if phrases %}
+        <p class="muted" style="margin:0 0 8px;">常用语：
+            {% for p in phrases %}
+            <button type="button" class="btn btn-secondary btn-sm phrase-btn" style="margin:2px;">{{ p.content }}</button>
+            {% endfor %}
+        </p>
+        {% endif %}
+        <textarea name="comment" id="id_comment" rows="3"
+                  style="width:100%;padding:10px;border:1px solid #ccc;border-radius:4px;font-size:14px;"
+                  placeholder="请填写审批意见（驳回时建议填写原因）"></textarea>
+        <p style="margin-top:12px;">
+            <button type="submit" name="result" value="approved" class="btn btn-success">通过</button>
+            <button type="submit" name="result" value="rejected" class="btn btn-danger"
+                    onclick="return confirm('确认驳回？单据将退回申请人草稿。');">驳回</button>
+        </p>
+    </form>
+</div>
+{% endif %}
+
+{% if can_resubmit %}
+<div class="card" style="border-left:4px solid #d9534f;">
+    <h2>单据已被驳回</h2>
+    <p class="muted">请根据审批意见修改后重新提交（当前版本暂不支持在线编辑，将以原内容重新进入审批链）。</p>
+    <form method="post" action="{% url 'resubmit' repair.pk %}" class="inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-success">重新提交</button>
+    </form>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2>审批记录</h2>
+    {% if approvals %}
+    <table>
+        <thead>
+            <tr><th>节点/环节</th><th>审批人</th><th>结果</th><th>意见</th><th>时间</th></tr>
+        </thead>
+        <tbody>
+            {% for a in approvals %}
+            <tr>
+                <td>
+                    {{ a.get_node_display }}
+                    {% if a.step %}<div class="muted">{{ a.get_step_display }}</div>{% endif %}
+                </td>
+                <td>{{ a.approver.username }}</td>
+                <td>
+                    {% if a.result == 'approved' %}
+                    <span class="badge b-success">通过</span>
+                    {% else %}
+                    <span class="badge b-failed">驳回</span>
+                    {% endif %}
+                </td>
+                <td style="white-space:pre-wrap;">{{ a.comment|default:"-" }}</td>
+                <td>{{ a.approved_at|date:"Y-m-d H:i" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">暂无审批记录。</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>工单历程 <span class="muted">（{{ events|length }} 个事件，只增不改）</span></h2>
+    {% if events %}
+    <div class="event-timeline">
+        {% for e in events %}
+        <div class="event-item event-{{ e.event_type }}">
+            <div class="event-dot"></div>
+            <div class="event-body">
+                <div class="event-head">
+                    <strong>{{ e.get_event_type_display }}</strong>
+                    <span class="muted">{{ e.created_at|date:"Y-m-d H:i" }} · {{ e.actor.username|default:"系统" }}</span>
+                </div>
+                {% if e.detail %}<div class="event-detail">{{ e.detail }}</div>{% endif %}
+                {% if e.remark %}<div class="event-remark">意见：{{ e.remark }}</div>{% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty">暂无历程事件。</p>
+    {% endif %}
+</div>
+
+<style>
+.event-timeline { margin-left: 8px; padding-left: 18px; border-left: 2px solid #dce5eb; }
+.event-item { position: relative; padding: 0 0 18px 16px; }
+.event-item:last-child { padding-bottom: 0; }
+.event-dot {
+    position: absolute; left: -25px; top: 3px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #417690; border: 2px solid #fff; box-shadow: 0 0 0 2px #417690;
+}
+.event-rejected .event-dot, .event-review_rejected .event-dot { background: #d9534f; box-shadow: 0 0 0 2px #d9534f; }
+.event-approved .event-dot, .event-review_passed .event-dot { background: #5cb85c; box-shadow: 0 0 0 2px #5cb85c; }
+.event-closed .event-dot, .event-settled .event-dot { background: #2c5468; box-shadow: 0 0 0 2px #2c5468; }
+.event-completed .event-dot, .event-dispatched .event-dot { background: #5bc0de; box-shadow: 0 0 0 2px #5bc0de; }
+.event-stock_used .event-dot { background: #f0ad4e; box-shadow: 0 0 0 2px #f0ad4e; }
+.event-head { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+.event-detail { font-size: 13px; color: #48657a; margin-top: 3px; }
+.event-remark { font-size: 13px; color: #7f8c99; margin-top: 2px; }
+</style>
+
+{% if dispatch %}
+<div class="card">
+    <h2>派工与结算</h2>
+    <table>
+        <tr><th style="width:140px;">派工单编号</th><td>{{ dispatch.code }}</td>
+            <th style="width:140px;">派工状态</th>
+            <td><span class="badge b-{{ dispatch.status }}">{{ dispatch.get_status_display }}</span>
+                {% if dispatch.reassigned_times %}（已改派 {{ dispatch.reassigned_times }} 次）{% endif %}
+            </td></tr>
+        <tr><th>工程队</th><td>{{ dispatch.engineering_team.full_name }}</td>
+            <th>负责人</th><td>{{ dispatch.leader.username|default:"-" }}</td></tr>
+        <tr><th>开工时间</th><td>{{ dispatch.started_at|date:"Y-m-d H:i"|default:"-" }}</td>
+            <th>完成时间</th><td>{{ dispatch.completed_at|date:"Y-m-d H:i"|default:"-" }}</td></tr>
+        <tr><th>拒收标识</th><td>{% if dispatch.is_rejected %}<span class="badge b-failed">已拒收</span>{% else %}否{% endif %}</td>
+            <th>改派</th><td>{{ dispatch.reassigned_times|default:0 }} 次</td></tr>
+        {% if dispatch.reject_reason %}
+        <tr><th>拒单理由</th><td colspan="3" style="color:#c0392b;">{{ dispatch.reject_reason }}</td></tr>
+        {% endif %}
+        {% if dispatch.photo %}
+        <tr><th>现场照片</th><td colspan="3"><a href="{{ dispatch.photo.url }}" target="_blank"><img src="{{ dispatch.photo.url }}" style="max-width:220px;border-radius:6px;"></a></td></tr>
+        {% endif %}
+        {% if settlement %}
+        <tr><th>结算单编号</th><td>{{ settlement.code }}</td>
+            <th>结算金额</th><td>{{ settlement.amount }} 元</td></tr>
+        <tr><th>创建人</th><td>{{ settlement.creator.username|default:"-" }}</td>
+            <th>结算状态</th><td>{% if settlement.is_settled %}<span class="badge b-closed">已结算</span>{% else %}<span class="badge b-draft">未结算</span>{% endif %}</td></tr>
+        {% endif %}
+    </table>
+</div>
+{% endif %}
+
+<script>
+document.querySelectorAll('.phrase-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        var ta = document.getElementById('id_comment');
+        ta.value = ta.value ? ta.value + '\n' + btn.textContent : btn.textContent;
+        ta.focus();
+    });
+});
+</script>
+{% endblock %}

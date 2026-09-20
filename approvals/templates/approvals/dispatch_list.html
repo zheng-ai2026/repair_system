@@ -1,0 +1,49 @@
+{% extends 'approvals/base.html' %}
+{% block title %}派工单列表{% endblock %}
+{% block content %}
+<h1>派工单列表</h1>
+
+<div class="card">
+    <div class="filter-bar">
+        <span style="flex:1;"></span>
+        {% if can_create %}
+        <a href="{% url 'dispatch_create' %}" class="btn btn-success btn-sm">+ 新建派工单</a>
+        {% endif %}
+    </div>
+
+    {% if orders %}
+    <table>
+        <thead>
+            <tr>
+                <th>派工单编号</th>
+                <th>维修单</th>
+                <th>油站</th>
+                <th>工程队</th>
+                <th>负责人</th>
+                <th>状态</th>
+                <th>拒收</th>
+                <th>改派</th>
+                <th>创建时间</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in orders %}
+            <tr>
+                <td><a href="{% url 'dispatch_detail' d.pk %}">{{ d.code }}</a></td>
+                <td>{{ d.repair_request.code }}</td>
+                <td>{{ d.repair_request.site.name }}</td>
+                <td>{{ d.engineering_team.full_name }}</td>
+                <td>{{ d.leader.username|default:"-" }}</td>
+                <td><span class="badge b-{{ d.status }}">{{ d.get_status_display }}</span></td>
+                <td>{% if d.is_rejected %}<span class="badge b-failed">已拒收</span>{% else %}-{% endif %}</td>
+                <td>{% if d.reassigned_times %}{{ d.reassigned_times }} 次{% else %}-{% endif %}</td>
+                <td>{{ d.created_at|date:"Y-m-d H:i" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">暂无派工单。</p>
+    {% endif %}
+</div>
+{% endblock %}

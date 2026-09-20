@@ -1,0 +1,32 @@
+{% extends 'approvals/base.html' %}
+{% block title %}{% if is_add %}新增设备档案{% else %}编辑设备档案{% endif %}{% endblock %}
+{% block content %}
+<h1>{% if is_add %}新增设备档案{% else %}编辑设备档案{% endif %}</h1>
+
+<form method="post">
+    {% csrf_token %}
+    <div class="card">
+        {% if form.non_field_errors %}
+        <ul class="messages">{% for e in form.non_field_errors %}<li class="error">{{ e }}</li>{% endfor %}</ul>
+        {% endif %}
+        <table>
+            {% for field in form %}
+            <tr>
+                <th style="width:140px;">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                </th>
+                <td>
+                    {{ field }}
+                    {% if field.help_text %}<div class="muted">{{ field.help_text }}</div>{% endif %}
+                    {% if field.errors %}<div style="color:#d9534f;font-size:13px;">{{ field.errors|striptags }}</div>{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+
+    <button type="submit" class="btn btn-success">保存</button>
+    <a href="{% if is_add %}{% url 'equipment_list' %}{% else %}{% url 'equipment_detail' equipment.pk %}{% endif %}"
+       class="btn btn-secondary">取消</a>
+</form>
+{% endblock %}

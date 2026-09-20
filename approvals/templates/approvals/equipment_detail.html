@@ -1,0 +1,104 @@
+{% extends 'approvals/base.html' %}
+{% block title %}设备档案 - {{ equipment.code }}{% endblock %}
+{% block content %}
+<h1>
+    设备档案
+    <span class="badge b-{{ equipment.status }}" style="font-size:13px;vertical-align:middle;">
+        {{ equipment.get_status_display }}
+    </span>
+</h1>
+
+{% if expiry_alerts %}
+<ul class="messages">
+    {% for a in expiry_alerts %}
+    <li class="error" style="background:{% if a.days_left < 0 %}#fbeaea{% else %}#fdf6e8{% endif %};color:{% if a.days_left < 0 %}#a02c2c{% else %}#9a6b12{% endif %};border-color:{% if a.days_left < 0 %}#f0c0c0{% else %}#ecd9a8{% endif %};">
+        {{ a.label }}：{{ a.date|date:"Y-m-d" }}
+        {% if a.days_left < 0 %}（已逾期 {{ a.overdue_days }} 天）{% else %}（剩余 {{ a.days_left }} 天）{% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+<div class="card">
+    <div style="display:flex;gap:28px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:520px;">
+            <h2>基本信息</h2>
+            <table>
+                <tr><th style="width:130px;">设备编号</th><td>{{ equipment.code }}</td></tr>
+                <tr><th>设备名称</th><td>{{ equipment.name }}</td></tr>
+                <tr><th>设备类别</th><td>{{ equipment.get_category_display }}</td></tr>
+                <tr><th>所属油站</th><td>{{ equipment.site.name }}（{{ equipment.site.code }}）</td></tr>
+                <tr><th>安装位置</th><td>{{ equipment.location|default:"-" }}</td></tr>
+                <tr><th>型号规格</th><td>{{ equipment.model_spec|default:"-" }}</td></tr>
+                <tr><th>出厂序列号</th><td>{{ equipment.serial_number|default:"-" }}</td></tr>
+                <tr><th>投运日期</th><td>{{ equipment.commission_date|date:"Y-m-d"|default:"-" }}</td></tr>
+                <tr><th>保修到期</th><td>{{ equipment.warranty_expiry|date:"Y-m-d"|default:"-" }}</td></tr>
+                <tr><th>检验到期</th><td>{{ equipment.inspection_expiry|date:"Y-m-d"|default:"-" }}</td></tr>
+                <tr><th>下次保养</th><td>{{ equipment.next_maintenance_date|date:"Y-m-d"|default:"-" }}</td></tr>
+                <tr><th>供应商</th><td>{{ equipment.supplier|default:"-" }}</td></tr>
+                <tr><th>备注</th><td>{{ equipment.remark|linebreaksbr|default:"-" }}</td></tr>
+                <tr><th>建档时间</th><td>{{ equipment.created_at|date:"Y-m-d H:i" }}</td></tr>
+            </table>
+        </div>
+        <div style="width:210px;text-align:center;">
+            <h2>一物一码</h2>
+            <img src="{% url 'equipment_qr_image' equipment.pk %}" alt="设备二维码"
+                 style="width:200px;height:200px;border:1px solid #e3e8ec;padding:4px;background:#fff;">
+            <p class="muted" style="margin:8px 0 0;">扫码查看档案 / 报修 / 履历</p>
+            <p style="margin-top:12px;">
+                <a class="btn btn-secondary btn-sm" href="{% url 'equipment_qr_page' equipment.pk %}" target="_blank">打印二维码</a>
+            </p>
+        </div>
+    </div>
+
+    <p style="margin-top:18px;">
+        <a class="btn btn-success" href="{% url 'repair_add' %}?equipment={{ equipment.pk }}">扫码报修 / 提交维修单</a>
+        {% if can_manage %}
+        <a class="btn" href="{% url 'equipment_edit' equipment.pk %}">编辑档案</a>
+        {% endif %}
+        <a class="btn btn-secondary" href="{% url 'equipment_list' %}">返回列表</a>
+    </p>
+</div>
+
+<div class="card">
+    <h2>维修履历（{{ history|length }}）</h2>
+    {% if history %}
+    <table>
+        <thead>
+            <tr>
+                <th>维修单号</th>
+                <th>提交时间</th>
+                <th>申请人</th>
+                <th>维修类型</th>
+                <th>故障描述</th>
+                <th>紧急程度</th>
+                <th>派工单</th>
+                <th>维修单状态</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in history %}
+            <tr>
+                <td><a href="{% url 'repair_detail' r.pk %}">{{ r.code|default:"（未编号）" }}</a></td>
+                <td>{{ r.created_at|date:"Y-m-d H:i" }}</td>
+                <td>{{ r.reporter.username }}</td>
+                <td>{{ r.get_repair_type_display }}</td>
+                <td>{{ r.description|truncatechars:30 }}</td>
+                <td>{{ r.get_urgency_display }}</td>
+                <td>
+                    {% if r.dispatch_order %}
+                    <a href="{% url 'dispatch_detail' r.dispatch_order.pk %}">{{ r.dispatch_order.code }}</a>
+                    {% else %}
+                    <span class="muted">-</span>
+                    {% endif %}
+                </td>
+                <td><span class="badge b-{{ r.status }}">{{ r.get_status_display }}</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">该设备暂无维修记录。</p>
+    {% endif %}
+</div>
+{% endblock %}

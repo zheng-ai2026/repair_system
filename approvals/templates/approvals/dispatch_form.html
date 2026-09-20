@@ -1,0 +1,30 @@
+{% extends 'approvals/base.html' %}
+{% block title %}新建派工单{% endblock %}
+{% block content %}
+<h1>新建派工单</h1>
+
+<div class="card">
+    {% if not form.repair_request.field.queryset.exists %}
+    <ul class="messages"><li class="info">当前没有“审批完成且未派工”的维修单，无需派工。</li></ul>
+    {% endif %}
+    <form method="post">
+        {% csrf_token %}
+        <table>
+            {% for field in form %}
+            <tr>
+                <th style="width:120px;"><label for="{{ field.id_for_label }}">{{ field.label }}</label></th>
+                <td>
+                    {{ field }}
+                    {% if field.help_text %}<div class="muted">{{ field.help_text }}</div>{% endif %}
+                    {% if field.errors %}<div style="color:#d9534f;font-size:13px;">{{ field.errors|striptags }}</div>{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+        <p style="margin-top:16px;">
+            <button type="submit" class="btn btn-success">创建派工单</button>
+            <a href="{% url 'dispatch_list' %}" class="btn btn-secondary">取消</a>
+        </p>
+    </form>
+</div>
+{% endblock %}

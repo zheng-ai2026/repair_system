@@ -1,0 +1,34 @@
+{% extends 'approvals/base.html' %}
+{% block title %}设备二维码 - {{ equipment.name }}{% endblock %}
+{% block content %}
+<div style="text-align:center;margin-top:10px;">
+    <div style="display:inline-block;border:2px dashed #417690;border-radius:10px;padding:28px 44px;background:#fff;"
+         class="qr-sheet">
+        <div style="font-size:20px;font-weight:bold;margin-bottom:4px;">{{ equipment.name }}</div>
+        <div class="muted" style="margin-bottom:16px;">
+            {{ equipment.site.name }} · {{ equipment.get_category_display }} · 编号 {{ equipment.code }}
+        </div>
+        <img src="{% url 'equipment_qr_image' equipment.pk %}" alt="设备二维码"
+             style="width:300px;height:300px;">
+        <div style="margin-top:14px;font-size:13px;color:#48657a;">
+            微信/浏览器扫码：查看设备档案 · 在线报修 · 维修履历
+        </div>
+        <div class="muted" style="margin-top:4px;font-size:12px;">
+            安装位置：{{ equipment.location|default:"未填写" }}
+        </div>
+    </div>
+    <p style="margin-top:20px;" class="no-print">
+        <button type="button" class="btn btn-success" onclick="window.print()">打印 / 另存为PDF</button>
+        <a href="{% url 'equipment_detail' equipment.pk %}" class="btn btn-secondary">返回档案</a>
+    </p>
+</div>
+
+<style>
+@media print {
+    .topbar, .back-home, .no-print, .messages { display: none !important; }
+    body { background: #fff; }
+    .container { margin: 0; max-width: none; }
+    .qr-sheet { border: 2px dashed #000 !important; box-shadow: none !important; }
+}
+</style>
+{% endblock %}

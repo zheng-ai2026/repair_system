@@ -1,0 +1,40 @@
+{% extends 'approvals/base.html' %}
+{% block title %}我的通知{% endblock %}
+{% block content %}
+<h1>我的通知</h1>
+
+<div class="card">
+    <div class="filter-bar">
+        <span class="muted">未读 {{ unread_count }} 条</span>
+        <span style="flex:1;"></span>
+        {% if unread_count %}
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-secondary btn-sm">全部标为已读</button>
+        </form>
+        {% endif %}
+    </div>
+
+    {% if notifications %}
+    <table>
+        <thead>
+            <tr><th>类型</th><th>标题</th><th>内容</th><th>关联单据</th><th>状态</th><th>时间</th></tr>
+        </thead>
+        <tbody>
+            {% for n in notifications %}
+            <tr {% if not n.is_read %}style="background:#f4f9fc;"{% endif %}>
+                <td>{{ n.get_category_display }}</td>
+                <td>{{ n.title }}</td>
+                <td>{{ n.content }}</td>
+                <td>{{ n.business_code|default:"-" }}</td>
+                <td>{% if n.is_read %}<span class="muted">已读</span>{% else %}<span class="badge b-pending_region_admin">未读</span>{% endif %}</td>
+                <td>{{ n.created_at|date:"Y-m-d H:i" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">暂无通知。</p>
+    {% endif %}
+</div>
+{% endblock %}

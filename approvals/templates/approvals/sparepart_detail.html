@@ -1,0 +1,118 @@
+{% extends 'approvals/base.html' %}
+{% block title %}备件 {{ part.code }}{% endblock %}
+{% block content %}
+<p>
+    <a href="{% url 'sparepart_list' %}" class="muted" style="text-decoration:none;">← 返回备件库存</a>
+</p>
+
+<div class="card">
+    <h2>
+        {{ part.code }} {{ part.name }}
+        {% if part.is_active %}
+        <span class="badge b-normal">启用</span>
+        {% else %}
+        <span class="badge b-deactivated">停用</span>
+        {% endif %}
+        {% if part.is_low_stock and part.is_active %}<span class="badge b-failed">低库存</span>{% endif %}
+        {% if can_manage %}
+        <a href="{% url 'sparepart_edit' part.pk %}" class="btn btn-secondary btn-sm" style="float:right;">编辑档案</a>
+        {% endif %}
+    </h2>
+    <table>
+        <tr><th style="width:120px;">规格型号</th><td>{{ part.spec|default:"-" }}</td>
+            <th style="width:120px;">单位</th><td>{{ part.unit|default:"-" }}</td></tr>
+        <tr><th>当前库存</th><td><strong style="font-size:16px;">{{ part.stock_quantity }}</strong></td>
+            <th>安全库存</th><td>{{ part.safety_stock }}</td></tr>
+        <tr><th>关联材料</th><td>{% if part.material %}{{ part.material.name }}{% else %}-{% endif %}</td>
+            <th>参考单价</th><td>{% if part.reference_price is not None %}{{ part.reference_price }} 元{% else %}-{% endif %}</td></tr>
+        {% if part.remark %}
+        <tr><th>备注</th><td colspan="3" style="white-space:pre-wrap;">{{ part.remark }}</td></tr>
+        {% endif %}
+        <tr><th>建档时间</th><td>{{ part.created_at|date:"Y-m-d H:i" }}</td>
+            <th>更新时间</th><td>{{ part.updated_at|date:"Y-m-d H:i" }}</td></tr>
+    </table>
+</div>
+
+{% if can_manage %}
+<div class="card" style="border-left:4px solid #5cb85c;">
+    <h2>入库登记</h2>
+    <form method="post" action="{% url 'sparepart_stock_in' part.pk %}">
+        {% csrf_token %}
+        <p style="margin:8px 0;">
+            <label>{{ in_form.quantity.label }}</label><br>
+            {{ in_form.quantity }}
+        </p>
+        <p style="margin:8px 0;">
+            <label>{{ in_form.remark.label }}</label><br>
+            {{ in_form.remark }}
+        </p>
+        <button type="submit" class="btn btn-success">确认入库</button>
+    </form>
+</div>
+
+<div class="card" style="border-left:4px solid #d9534f;">
+    <h2>出库登记</h2>
+    <form method="post" action="{% url 'sparepart_stock_out' part.pk %}">
+        {% csrf_token %}
+        <p style="margin:8px 0;">
+            <label>{{ out_form.quantity.label }}（当前库存 {{ part.stock_quantity }}）</label><br>
+            {{ out_form.quantity }}
+        </p>
+        <p style="margin:8px 0;">
+            <label>{{ out_form.dispatch_order.label }}</label><br>
+            {{ out_form.dispatch_order }}
+        </p>
+        <p style="margin:8px 0;">
+            <label>{{ out_form.remark.label }}</label><br>
+            {{ out_form.remark }}
+        </p>
+        <button type="submit" class="btn btn-danger"
+                onclick="return confirm('确认出库？库存将立即扣减。');">确认出库</button>
+    </form>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2>出入库台账（最近 50 条）</h2>
+    {% if movements %}
+    <table>
+        <thead>
+            <tr>
+                <th>时间</th>
+                <th>类型</th>
+                <th>数量</th>
+                <th>结存</th>
+                <th>关联派工单</th>
+                <th>经办人</th>
+                <th>备注</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in movements %}
+            <tr>
+                <td style="white-space:nowrap;">{{ m.created_at|date:"Y-m-d H:i" }}</td>
+                <td>
+                    {% if m.movement_type == 'in' %}
+                    <span class="badge b-normal">入库</span>
+                    {% else %}
+                    <span class="badge b-failed">出库</span>
+                    {% endif %}
+                </td>
+                <td>{% if m.movement_type == 'in' %}+{% else %}-{% endif %}{{ m.quantity }}</td>
+                <td><strong>{{ m.balance_after }}</strong></td>
+                <td>
+                    {% if m.dispatch_order %}
+                    <a href="{% url 'dispatch_detail' m.dispatch_order.pk %}">{{ m.dispatch_order.code }}</a>
+                    {% else %}-{% endif %}
+                </td>
+                <td>{{ m.operator.username|default:"-" }}</td>
+                <td>{{ m.remark|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">暂无出入库记录。</p>
+    {% endif %}
+</div>
+{% endblock %}

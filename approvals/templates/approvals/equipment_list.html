@@ -1,0 +1,79 @@
+{% extends 'approvals/base.html' %}
+{% block title %}设备档案{% endblock %}
+{% block content %}
+<h1>设备档案</h1>
+
+<div class="card">
+    <form method="get" class="filter-bar">
+        <select name="category">
+            <option value="">全部类别</option>
+            {% for value, label in category_choices %}
+            <option value="{{ value }}" {% if value == current_category %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="status">
+            <option value="">全部状态</option>
+            {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if value == current_status %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <input type="text" name="q" value="{{ keyword }}" placeholder="编号 / 名称 / 序列号 / 油站 / 位置">
+        <button type="submit" class="btn btn-sm">筛选</button>
+        <a href="{% url 'equipment_list' %}" class="btn btn-secondary btn-sm">重置</a>
+        <span style="flex:1;"></span>
+        {% if can_manage %}
+        <a href="{% url 'equipment_add' %}" class="btn btn-success btn-sm">+ 新增设备</a>
+        {% endif %}
+    </form>
+
+    {% if equipments %}
+    <table>
+        <thead>
+            <tr>
+                <th>设备编号</th>
+                <th>所属油站</th>
+                <th>设备名称</th>
+                <th>类别</th>
+                <th>型号规格</th>
+                <th>安装位置</th>
+                <th>状态</th>
+                <th>到期提醒</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in equipments %}
+            <tr>
+                <td><a href="{% url 'equipment_detail' e.pk %}">{{ e.code }}</a></td>
+                <td>{{ e.site.name }}</td>
+                <td>{{ e.name }}</td>
+                <td>{{ e.get_category_display }}</td>
+                <td>{{ e.model_spec|default:"-" }}</td>
+                <td>{{ e.location|default:"-" }}</td>
+                <td><span class="badge b-{{ e.status }}">{{ e.get_status_display }}</span></td>
+                <td>
+                    {% with alerts=e.expiry_alerts %}
+                    {% if alerts %}
+                        {% for a in alerts %}
+                        <div style="color:{% if a.days_left < 0 %}#d9534f{% else %}#f0ad4e{% endif %};font-size:12px;">
+                            {{ a.label }}{% if a.days_left < 0 %}已逾期 {{ a.overdue_days }} 天{% else %}剩 {{ a.days_left }} 天{% endif %}
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                    <span class="muted">-</span>
+                    {% endif %}
+                    {% endwith %}
+                </td>
+                <td style="white-space:nowrap;">
+                    <a class="btn btn-secondary btn-sm" href="{% url 'equipment_detail' e.pk %}">档案</a>
+                    <a class="btn btn-sm" href="{% url 'equipment_qr_page' e.pk %}">二维码</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">暂无符合条件的设备档案。</p>
+    {% endif %}
+</div>
+{% endblock %}
