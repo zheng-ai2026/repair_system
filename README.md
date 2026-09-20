@@ -21,11 +21,11 @@ python manage.py migrate
 # 创建管理员
 python manage.py createsuperuser
 
-# 启动开发服务器
+# 启动开发服务器（默认端口 6321，也可用 python manage.py runserver <端口> 覆盖）
 python manage.py runserver
 ```
 
-访问 `http://127.0.0.1:8000/`，管理员后台 `http://127.0.0.1:8000/admin/`。
+访问 `http://127.0.0.1:6321/`，管理员后台 `http://127.0.0.1:6321/admin/`。
 
 ## 角色与权限
 

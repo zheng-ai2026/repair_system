@@ -17,4 +17,4 @@ Thumbs.db
 
 # 临时
 新建文本文档.txt
-_do_commit.py
+/_*.py
