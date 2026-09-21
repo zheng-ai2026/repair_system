@@ -5,46 +5,57 @@
 <style>
     /* 登录框顶部公司标志区域（仅作用于登录页，不影响其他页面） */
     .login-brand {
-        display: flex;
-        align-items: center;
-        gap: 12px;
         padding: 16px 0;
         border-bottom: 1px solid #eee;
         margin-bottom: 16px;
     }
-    .login-brand-logo img {
+    /* 上层：两 logo 并排 + 公司全称 */
+    .login-brand-top {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .login-brand-top .login-brand-name {
+        flex: 1;
+        font-size: 16px;
+        font-weight: bold;
+        color: #1e4b6b;
+        white-space: nowrap;
+    }
+    /* logo 组：两张图横向排列 */
+    .login-brand-logos {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .login-brand-logos img {
         height: 48px;
         width: auto;
         max-width: 120px;
         display: block;
         object-fit: contain;
     }
-    .login-brand-text {
-        line-height: 1.4;
-    }
-    .login-brand-name {
+    /* 下层：副标题单独一行，居中，字体与公司名一致 */
+    .login-brand-sub {
+        margin-top: 10px;
+        text-align: center;
         font-size: 16px;
         font-weight: bold;
         color: #1e4b6b;
-        white-space: nowrap;
-    }
-    .login-brand-sub {
-        font-size: 13px;
-        color: #666;
-        margin-top: 2px;
         white-space: nowrap;
     }
 </style>
 <div style="max-width: 380px; margin: 60px auto;">
     <div class="card">
         <div class="login-brand">
-            <div class="login-brand-logo">
-                <img src="{% static 'images/logo.png' %}" alt="公司标志">
-            </div>
-            <div class="login-brand-text">
+            <div class="login-brand-top">
+                <div class="login-brand-logos">
+                    <img src="{% static 'images/logo.png' %}" alt="公司标志">
+                    <img src="{% static 'images/logo1.png' %}" alt="合作标志">
+                </div>
                 <div class="login-brand-name">辽宁省高速中油能源有限责任公司</div>
-                <div class="login-brand-sub">加油站维修审批系统</div>
             </div>
+            <div class="login-brand-sub">加油站维修审批系统</div>
         </div>
         <h1 style="text-align:center;">用户登录</h1>
         {% if form.errors %}
