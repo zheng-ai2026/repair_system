@@ -1,4 +1,7 @@
 import io
+import os
+import tempfile
+from urllib.parse import quote
 
 import qrcode
 from PIL import Image
@@ -426,6 +429,87 @@ def repair_detail(request, pk):
             "can_resubmit": can_resubmit,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# 维修单 打印 / PDF 导出
+# ---------------------------------------------------------------------------
+def _generate_pdf_via_word(html_content: str) -> bytes:
+    """
+    用 Word COM SaveAs(FileFormat=17) 把 HTML 转成 PDF 二进制。
+    依赖本机已安装 Microsoft Word（pywin32 的 win32com.client）。
+    Windows 环境方案：相比 weasyprint 缺 GTK、xhtml2pdf 中文字体嵌入失败，
+    Word COM 原生渲染 HTML + 宋体 + 表格合并单元格，100% 保真。
+    """
+    import win32com.client
+
+    html_path = os.path.join(tempfile.gettempdir(), f"repair_{os.getpid()}_{id(html_content)}.html")
+    pdf_path = os.path.join(tempfile.gettempdir(), f"repair_{os.getpid()}_{id(html_content)}.pdf")
+
+    try:
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+
+        word = win32com.client.Dispatch("Word.Application")
+        word.Visible = False
+        word.DisplayAlerts = False
+        try:
+            doc = word.Documents.Open(os.path.abspath(html_path))
+            doc.SaveAs(os.path.abspath(pdf_path), FileFormat=17)  # 17 = wdFormatPDF
+            doc.Close(False)
+        finally:
+            try:
+                word.Quit()
+            except Exception:
+                pass
+
+        with open(pdf_path, "rb") as f:
+            return f.read()
+    finally:
+        for p in (html_path, pdf_path):
+            try:
+                os.unlink(p)
+            except Exception:
+                pass
+
+
+@login_required
+def repair_print(request, pk):
+    """
+    打印预览页 —— 在新标签内渲染完整 6×6 表格，用户可 Ctrl+P 打印。
+    inline = 浏览器直接渲染；attachment 才会下载。
+    页面顶部有「返回维修单」按钮可一键回主程序。
+    """
+    repair = get_object_or_404(visible_repair_requests(request.user), pk=pk)
+    return render(request, "approvals/repair_pdf.html", {"repair": repair})
+
+
+@login_required
+def repair_pdf(request, pk):
+    """服务器端 Word COM 渲染 PDF 直接下载"""
+    repair = get_object_or_404(visible_repair_requests(request.user), pk=pk)
+    html = render(request, "approvals/repair_pdf.html", {"repair": repair}).content.decode("utf-8")
+    try:
+        pdf_bytes = _generate_pdf_via_word(html)
+    except Exception:
+        # Word 不可用的降级：直接返回 HTML 让用户 Ctrl+P
+        messages.error(
+            request,
+            "服务端未安装 Microsoft Word，无法自动生成 PDF。"
+            "请使用上方的'打印预览'链接，浏览器 Ctrl+P → 另存为 PDF。",
+        )
+        return redirect("repair_print", pk=pk)
+
+    filename = f"{repair.code}_维修申请单.pdf"
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    # RFC 5987 双格式：filename 放纯 ASCII（兼容老浏览器），
+    # filename* 放 URL 编码的完整中文（现代浏览器正确解码）
+    ascii_name = f"{repair.code}.pdf"  # 英文 fallback
+    encoded = quote(filename)  # URL-encode 所有非 ASCII
+    response["Content-Disposition"] = (
+        f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{encoded}'
+    )
+    return response
 
 
 @login_required

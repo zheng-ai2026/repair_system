@@ -1,0 +1,108 @@
+{% load static %}<!DOCTYPE html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8">
+<title>{{ repair.code }} 维修申请单</title>
+<style>
+@page { size: A4; margin: 1.2cm 1.2cm 1.2cm 1.2cm; }
+@media print {
+    .no-print { display: none !important; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+* { box-sizing: border-box; }
+body {
+    font-family: "SimSun", "宋体", "Microsoft YaHei", serif;
+    font-size: 12pt; color: #000;
+    padding: 20px; margin: 0;
+}
+.toolbar { margin-bottom: 14px; }
+.toolbar a, .toolbar button {
+    display: inline-block;
+    padding: 6px 16px; margin-right: 10px; font-size: 12pt;
+    cursor: pointer; border: 1px solid #333; background: #f0f0f0;
+    border-radius: 4px; color: #333; text-decoration: none;
+}
+.toolbar a:hover, .toolbar button:hover { background: #e0e0e0; }
+.title { text-align: center; font-size: 22pt; font-weight: bold; margin-bottom: 12px; }
+.subtitle { text-align: center; font-size: 14pt; margin-bottom: 18px; color: #444; }
+table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+td {
+    border: 1px solid #000;
+    padding: 8px 10px;
+    vertical-align: top;
+    font-size: 12pt;
+    line-height: 1.7;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+}
+.sign td {
+    height: 48px;
+    vertical-align: bottom;
+    text-align: center;
+    padding-bottom: 14px;
+    font-size: 11pt;
+    color: #333;
+}
+.bold { font-weight: bold; }
+.money { text-align: right; font-family: "Consolas", "Courier New", monospace; }
+</style>
+</head>
+<body>
+
+<div class="toolbar no-print">
+    <a href="{% url 'repair_detail' repair.pk %}">← 返回维修单</a>
+    <button onclick="window.print()">🖨️ 打印</button>
+    <button onclick="history.back()">关闭此页</button>
+</div>
+
+<div class="title">加油站维修申请单</div>
+<div class="subtitle">{{ repair.code }} — LZ-26-026 制式</div>
+
+<table>
+    {# R0: 加油站名 | 日期 #}
+    <tr>
+        <td colspan="3">加油站名：{{ repair.site.name }}{% if repair.site.code %}（{{ repair.site.code }}）{% endif %}</td>
+        <td colspan="3">日期：{{ repair.created_at|date:"Y.n.j" }}</td>
+    </tr>
+
+    {# R1: 站长 | 电话 #}
+    <tr>
+        <td colspan="3">加油站站长：{{ repair.contact_phone|default:"" }}{% if repair.reporter %} / {{ repair.reporter.profile.display_name }}{% endif %}</td>
+        <td colspan="3">电话：{{ repair.contact_phone|default:"" }}</td>
+    </tr>
+
+    {# R2: 报修详情 #}
+    <tr>
+        <td colspan="6">报修详情：{{ repair.description|default:"" }}</td>
+    </tr>
+
+    {# R3: 维修单位 #}
+    <tr>
+        <td colspan="6">维修单位：{{ repair.repair_vendor|default:"" }}</td>
+    </tr>
+
+    {# R4: 维修内容及预算 —— 自动拼接材料明细 + 工时 + 路费 + 合计 #}
+    <tr>
+        <td colspan="6">
+维修内容及预算：<br/>
+{% for item in repair.material_items.all %}{% if item.quantity %}
+{{ item.material.name|default:item.custom_name }}{% if item.material.spec %}（{{ item.material.spec }}）{% endif %}：
+{{ item.quantity }}{{ item.material.unit|default:"" }} × {{ item.unit_price }}元 = {{ item.subtotal }}元；<br/>
+{% endif %}{% endfor %}
+{% if repair.labor_cost %}工时费：{{ repair.labor_cost }}元；<br/>{% endif %}
+{% if repair.travel_cost %}路费：{{ repair.travel_cost }}元<br/>{% endif %}
+<span class="bold">维修费合计：{{ repair.total_cost }} 元</span>
+        </td>
+    </tr>
+
+    {# R5: 6 列签名位 #}
+    <tr class="sign">
+        <td>分管经理</td>
+        <td>部门负责人</td>
+        <td>预算审核</td>
+        <td>预算审核</td>
+        <td>经办人</td>
+        <td>片区审核</td>
+    </tr>
+</table>
+
+</body></html>

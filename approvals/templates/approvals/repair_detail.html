@@ -3,6 +3,11 @@
 {% block content %}
 <p>
     <a href="{% url 'repair_list' %}" class="muted" style="text-decoration:none;">← 返回列表</a>
+    &nbsp;|&nbsp;
+    <a href="{% url 'repair_print' repair.pk %}" target="_blank" class="btn"
+       style="padding:3px 12px;border:1px solid #333;background:#f8f8f8;border-radius:4px;font-size:12pt;text-decoration:none;">🖨️ 预览打印</a>
+    <a href="{% url 'repair_pdf' repair.pk %}" class="btn"
+       style="padding:3px 12px;border:1px solid #333;background:#d4edda;border-radius:4px;font-size:12pt;text-decoration:none;color:#155724;">📄 下载 PDF</a>
 </p>
 
 <div class="card">
