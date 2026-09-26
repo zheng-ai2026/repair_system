@@ -1,4 +1,5 @@
 {% extends 'approvals/base.html' %}
+{% load static %}
 {% block title %}提交维修单{% endblock %}
 {% block content %}
 <h1>提交维修单</h1>
@@ -62,14 +63,16 @@
     </div>
 
     <div class="card">
-        <h2>现场照片 / 视频 <span class="muted">（可选，可多选；支持 jpg/png/gif/webp/bmp 与 mp4/mov/avi/mkv/webm；照片 ≤20MB，视频 ≤500MB）</span></h2>
-        <input type="file" name="media" multiple accept="image/*,video/*">
-        <div class="muted" style="margin-top:6px;">建议拍摄设备铭牌、故障部位、现场环境，便于审批人快速判断。</div>
+        <h2>现场照片 / 视频 <span class="muted">（可选；支持 jpg/png/gif/webp/bmp 与 mp4/mov/avi/mkv/webm；照片 ≤20MB，视频 ≤500MB）</span></h2>
+        <input type="file" name="media" multiple accept="image/*,video/*" data-enhance="media">
+        <div class="muted" style="margin-top:6px;">建议拍摄设备铭牌、故障部位、现场环境，便于审批人快速判断。可多次添加；点击缩略图查看大图，× 按钮移除单个文件。</div>
     </div>
 
     <button type="submit" class="btn btn-success">提交维修单</button>
     <a href="{% url 'repair_list' %}" class="btn btn-secondary">取消</a>
 </form>
+
+<script src="{% static 'js/file_uploader.js' %}"></script>
 
 <script>
 (function () {

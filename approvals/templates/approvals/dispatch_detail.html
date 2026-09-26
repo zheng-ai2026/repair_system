@@ -1,4 +1,5 @@
 {% extends 'approvals/base.html' %}
+{% load static %}
 {% block title %}派工单 {{ dispatch.code }}{% endblock %}
 {% block content %}
 <p>
@@ -171,16 +172,18 @@
         </p>
         <p style="margin:8px 0;">
             <label>维修前照片/视频（可选，可多选，支持 jpg/png/gif/webp 与 mp4/mov/avi/mkv/webm；照片 ≤20MB，视频 ≤500MB）</label><br>
-            <input type="file" name="before_media" multiple accept="image/*,video/*">
+            <input type="file" name="before_media" multiple accept="image/*,video/*" data-enhance="media">
         </p>
         <p style="margin:8px 0;">
             <label>维修后照片/视频（至少 1 个，可多选，格式要求同上）</label><br>
-            <input type="file" name="media" multiple accept="image/*,video/*" required>
+            <input type="file" name="media" multiple accept="image/*,video/*" required data-enhance="media">
         </p>
         <button type="submit" class="btn btn-success">提交完工，申请验收</button>
     </form>
 </div>
 {% endif %}
+
+<script src="{% static 'js/file_uploader.js' %}"></script>
 
 {% with stock_movements=dispatch.stock_movements.all %}
 {% if stock_movements %}

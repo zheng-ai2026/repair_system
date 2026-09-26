@@ -460,8 +460,28 @@ class RepairRequest(models.Model):
         help_text="扫码报修或手动选择后，单据自动归入设备履历",
     )
     description = models.TextField("问题描述")
+    contact_phone = models.CharField(
+        "联系电话", max_length=30, blank=True, help_text="站长或报修联系人电话"
+    )
+    repair_vendor = models.CharField(
+        "维修单位",
+        max_length=200,
+        blank=True,
+        help_text="维修服务提供商名称（派工后将自动回填工程队全称）",
+    )
+    labor_cost = models.DecimalField(
+        "工时费", max_digits=14, decimal_places=2, null=True, blank=True
+    )
+    travel_cost = models.DecimalField(
+        "路费", max_digits=14, decimal_places=2, null=True, blank=True
+    )
     budget_amount = models.DecimalField(
-        "预算总额", max_digits=14, decimal_places=2, null=True, blank=True
+        "预算总额",
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="可留空，保存时将按材料费+工时费+路费自动汇总",
     )
     status = models.CharField(
         "当前状态",
@@ -507,6 +527,19 @@ class RepairRequest(models.Model):
             except ValueError:
                 sequence = cls.objects.filter(code__startswith=prefix).count() + 1
         return f"{prefix}{sequence:03d}"
+
+    @property
+    def total_cost(self):
+        """费用合计：材料费 + 工时费 + 路费。"""
+        from decimal import Decimal
+
+        material_total = sum(
+            (item.subtotal for item in self.material_items.all()),
+            Decimal("0"),
+        )
+        labor = self.labor_cost or Decimal("0")
+        travel = self.travel_cost or Decimal("0")
+        return material_total + labor + travel
 
     def save(self, *args, **kwargs):
         if not self.code and self.site_id:

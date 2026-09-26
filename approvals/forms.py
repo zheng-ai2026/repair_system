@@ -151,12 +151,22 @@ class RepairRequestForm(forms.ModelForm):
             "urgency",
             "equipment_name",
             "description",
+            "contact_phone",
+            "repair_vendor",
+            "labor_cost",
+            "travel_cost",
             "budget_amount",
         )
         widgets = {
             "description": forms.Textarea(attrs={"rows": 4}),
             "equipment_name": forms.TextInput(attrs={"placeholder": "如：3号加油机"}),
-            "budget_amount": forms.NumberInput(attrs={"step": "0.01", "min": "0"}),
+            "contact_phone": forms.TextInput(attrs={"placeholder": "如：15524417906"}),
+            "repair_vendor": forms.TextInput(attrs={"placeholder": "如：河南三绅电子科技有限公司"}),
+            "labor_cost": forms.NumberInput(attrs={"step": "0.01", "min": "0"}),
+            "travel_cost": forms.NumberInput(attrs={"step": "0.01", "min": "0"}),
+            "budget_amount": forms.NumberInput(
+                attrs={"step": "0.01", "min": "0", "placeholder": "可留空，自动按明细汇总"}
+            ),
         }
 
     def __init__(self, *args, user=None, **kwargs):

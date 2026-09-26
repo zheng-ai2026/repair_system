@@ -16,16 +16,28 @@
     <table>
         <tr><th style="width:140px;">申请单位</th><td>{{ repair.site.name }}（{{ repair.site.code }}）</td>
             <th style="width:140px;">所属片区</th><td>{{ repair.site.region.name|default:"-" }}</td></tr>
-        <tr><th>申请人</th><td>{{ repair.reporter.username }}</td>
+        <tr><th>加油站站长</th><td>
+            {% if repair.site.manager %}
+            {{ repair.site.manager.get_full_name|default:repair.site.manager.username }}
+            {% else %}-{% endif %}
+        </td>
+            <th>联系电话</th><td>{{ repair.contact_phone|default:"-" }}</td></tr>
+        <tr><th>申请人</th><td>{{ repair.reporter.get_full_name|default:repair.reporter.username }}</td>
             <th>创建时间</th><td>{{ repair.created_at|date:"Y-m-d H:i" }}</td></tr>
         <tr><th>维修类型</th><td>{{ repair.get_repair_type_display }}</td>
             <th>紧急程度</th><td>{{ repair.get_urgency_display }}</td></tr>
+        <tr><th>维修单位</th><td colspan="3">
+            {{ repair.repair_vendor|default:"未填写（派工后自动回填）" }}
+        </td></tr>
         <tr><th>设备名称</th><td>
             {% if repair.equipment %}
             <a href="{% url 'equipment_detail' repair.equipment.pk %}">{{ repair.equipment.name }}（{{ repair.equipment.code }}）</a>
             {% else %}{{ repair.equipment_name|default:"-" }}{% endif %}
         </td>
-            <th>预算总额</th><td>{% if repair.budget_amount %}{{ repair.budget_amount }} 元{% else %}-{% endif %}</td></tr>
+            <th>预算总额</th><td>
+                {% if repair.budget_amount %}{{ repair.budget_amount }} 元
+                {% else %}<span class="muted">未填写，明细合计 {{ repair.total_cost }} 元</span>{% endif %}
+            </td></tr>
         <tr><th>追加来源</th><td colspan="3">
             {% if repair.parent %}
             <a href="{% url 'repair_detail' repair.parent.pk %}">{{ repair.parent.code }}</a>
@@ -63,7 +75,7 @@
 {% endif %}
 
 <div class="card">
-    <h2>材料明细</h2>
+    <h2>费用明细</h2>
     {% if material_items %}
     <table>
         <thead>
@@ -83,13 +95,16 @@
             </tr>
             {% endfor %}
         </tbody>
-        <tfoot>
-            <tr><th colspan="5" style="text-align:right;">材料合计</th><th>{{ material_total }} 元</th></tr>
-        </tfoot>
     </table>
     {% else %}
     <p class="empty">未填写材料明细。</p>
     {% endif %}
+    <table style="margin-top:10px;">
+        <tr><th style="width:200px;">材料小计</th><td>{{ material_total }} 元</td></tr>
+        <tr><th>工时费</th><td>{% if repair.labor_cost %}{{ repair.labor_cost }} 元{% else %}—{% endif %}</td></tr>
+        <tr><th>路费</th><td>{% if repair.travel_cost %}{{ repair.travel_cost }} 元{% else %}—{% endif %}</td></tr>
+        <tr><th style="color:#417690;">费用合计（自动汇总）</th><td style="font-weight:bold;color:#2c5468;font-size:16px;">{{ repair.total_cost }} 元</td></tr>
+    </table>
 </div>
 
 {% if can_approve %}

@@ -321,6 +321,10 @@ def repair_add(request):
                     item = item_form.save(commit=False)
                     item.repair_request = repair
                     item.save()
+                # 预算总额自动回填：未手填时按材料+工时+路费自动汇总
+                if not repair.budget_amount:
+                    repair.budget_amount = repair.total_cost
+                    repair.save(update_fields=["budget_amount"])
                 for upload, media_type, _size_limit in media_rows:
                     RepairMedia.objects.create(
                         repair_request=repair,
